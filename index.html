@@ -274,8 +274,21 @@ function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12) {
     cuProb = 1; cuLabel = 'Málo'; cuColor = '#ff9100';
   }
 
+  // Průměrná rychlost stoupání v termice (m/s) - empiricky odhad
+  // Zalozeno na CAPE a vysce zakladny: silnejsi termika = vyssi zakladna = vetsi CAPE
+  var wstar;
+  if(cape > 0) {
+    // Fyzikalni odhad: w* = cbrt(g/T * H * w_heat)
+    // Zjednoduseny vzorec: w_avg ≈ 0.4 * cbrt(CAPE) pro stredni termiku
+    wstar = Math.round(0.4 * Math.pow(cape, 1/3) * 10) / 10;
+  } else {
+    // Z ts skaly (0-5): empiricky
+    wstar = Math.round((0.3 + 0.65 * ts) * 10) / 10;
+  }
+  wstar = Math.max(0, Math.min(6, wstar));
+
   return {
-    tb: tb, ts: ts,
+    tb: tb, ts: ts, tbMax: tbMax, wstar: wstar,
     spread: Math.round(spread*10)/10,
     cape: Math.round(cape), rh: Math.round(rh),
     cuLabel: cuLabel, cuColor: cuColor, cuProb: cuProb
@@ -328,9 +341,12 @@ function ring(s,c){
     +'<span style="font-size:8px;color:#4a6180">/100</span></div></div>';
 }
 function arrow(deg){
+  // Wind direction = odkud vane vitr (meteorologicka konvence)
+  // Sipka ukazuje ODKUD vane vitr (otocena o 180 vuci smeru pohybu vzduchu)
+  var d = (deg + 180) % 360;
   return '<svg width="30" height="30" viewBox="0 0 30 30">'
-    +'<circle cx="15" cy="15" r="13" fill="none" stroke="#1a2d45" stroke-width="1.5"/>'
-    +'<g transform="rotate('+deg+',15,15)"><polygon points="15,3 18.5,16 15,13 11.5,16" fill="#5badff" style="filter:drop-shadow(0 0 3px #5badff)"/></g></svg>';
+    +'<circle cx="15" cy="15" r="13" fill="none" stroke="#e2e8f0" stroke-width="1.5"/>'
+    +'<g transform="rotate('+d+',15,15)"><polygon points="15,3 18.5,16 15,13 11.5,16" fill="#2563eb" style="filter:drop-shadow(0 0 3px #93c5fd)"/></g></svg>';
 }
 function tbars(ts){
   var h='<div class="tbrs">';
@@ -388,17 +404,31 @@ function render(){
     +'<div class="gg">'
     // Thermal summary box (full width)
     +'<div class="thbox">'
+      // Row 1: Zakladna 12Z + Max zakladna + Cu oblaky
       +'<div class="thitem">'
         +'<div class="thval" style="color:'+tbc+'">'+d.tb+'</div>'
-        +'<div class="thlbl">Základna Cu (m)</div>'
+        +'<div class="thlbl">Základna 12Z (m)</div>'
       +'</div>'
-      +'<div class="thitem" style="display:flex;flex-direction:column;align-items:center">'
-        +tbars(d.ts)
-        +'<div class="thlbl" style="margin-top:5px">Síla termiky</div>'
+      +'<div class="thitem">'
+        +'<div class="thval" style="color:#16a34a">'+(d.tbMax||d.tb)+'</div>'
+        +'<div class="thlbl">Max základna (m)</div>'
       +'</div>'
       +'<div class="thitem">'
         +'<div class="thval" style="color:'+d.cuColor+'">'+d.cuLabel+'</div>'
         +'<div class="thlbl">Cu oblaky</div>'
+      +'</div>'
+    +'</div>'
+    // Row 2: Sila termiky + stoupani
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px">'
+      +'<div class="gb" style="text-align:center">'
+        +'<div class="gl">Síla termiky</div>'
+        +tbars(d.ts)
+        +'<div class="gs" style="margin-top:4px">'+d.ts.toFixed(1)+' / 5.0</div>'
+      +'</div>'
+      +'<div class="gb" style="text-align:center">'
+        +'<div class="gl">Průměrné stoupání</div>'
+        +'<div style="margin-top:4px"><span class="gv" style="color:#2563eb">'+d.wstar+'</span><span class="gu">m/s</span></div>'
+        +'<div class="gs">průměr v termice</div>'
       +'</div>'
     +'</div>'
     
@@ -428,8 +458,9 @@ function render(){
 /* API - pouzivame icon_eu (DWD) pro nejlepsi pokryti stredni Evropy */
 function loadWeather(){
   showLoading('Načítám počasí...');
-  // Dva modely: icon_eu pro termiku, best_match pro srazky (ensemble)
-  var url='https://api.open-meteo.com/v1/forecast'
+
+  // URL 1: best_match - denni data + srazky (ensemble)
+  var urlMain='https://api.open-meteo.com/v1/forecast'
     +'?latitude='+lat+'&longitude='+lon
     +'&daily=weather_code,temperature_2m_max,temperature_2m_min'
     +',wind_speed_10m_max,wind_direction_10m_dominant'
@@ -437,19 +468,29 @@ function loadWeather(){
     +'&hourly=relative_humidity_2m,dew_point_2m,temperature_2m,boundary_layer_height,cape,visibility,precipitation_probability'
     +'&wind_speed_unit=kmh&timezone=UTC&forecast_days=5';
 
-  fetch(url)
-    .then(function(r){
-      if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t.slice(0,200));});
-      return r.json();
+  // URL 2: icon_d2 - vysoka presnost pro termiku ve stredni Evrope
+  var urlTherm='https://api.open-meteo.com/v1/forecast'
+    +'?latitude='+lat+'&longitude='+lon
+    +'&hourly=temperature_2m,dew_point_2m,boundary_layer_height,cape'
+    +'&timezone=UTC&forecast_days=5&models=icon_d2';
+
+  Promise.all([fetch(urlMain), fetch(urlTherm)])
+    .then(function(responses){
+      if(!responses[0].ok) return responses[0].text().then(function(t){throw new Error(responses[0].status+': '+t.slice(0,150));});
+      return Promise.all([responses[0].json(), responses[1].ok ? responses[1].json() : null]);
     })
-    .then(function(data){
+    .then(function(results){
+      var data=results[0], dataTherm=results[1];
       var dl=data.daily, hl=data.hourly, n=dl.time.length;
+      // Pokud mame icon_d2 data, pouzijeme je pro termiku
+      var hlT = (dataTherm && dataTherm.hourly) ? dataTherm.hourly : null;
+
       days=[];
       for(var i=0;i<n;i++){
         var h0=i*24;
         // Najdi presny index pro 12:00 UTC daneho dne podle hl.time
         var target12 = dl.time[i]+'T12:00';
-        var h12 = h0+12; // vychozi odhad
+        var h12 = h0+12;
         if(hl.time) {
           for(var hi=h0;hi<h0+24&&hi<hl.time.length;hi++){
             if(hl.time[hi]&&hl.time[hi].indexOf(target12)===0){h12=hi;break;}
@@ -457,12 +498,21 @@ function loadWeather(){
         }
         var rhArr=[], blhArr=[], capeArr=[], visArr=[];
         var t12=null, td12=null;
+        // Termicke hodnoty: preferuj icon_d2, fallback best_match
+        if(hlT) {
+          if(hlT.temperature_2m&&hlT.temperature_2m[h12]!=null) t12=hlT.temperature_2m[h12];
+          if(hlT.dew_point_2m&&hlT.dew_point_2m[h12]!=null) td12=hlT.dew_point_2m[h12];
+          if(hlT.boundary_layer_height&&hlT.boundary_layer_height[h12]!=null) blhArr.push(hlT.boundary_layer_height[h12]);
+          if(hlT.cape&&hlT.cape[h12]!=null) capeArr.push(hlT.cape[h12]);
+        }
+        // Fallback na best_match pokud icon_d2 nema data
+        if(t12==null && hl.temperature_2m&&hl.temperature_2m[h12]!=null) t12=hl.temperature_2m[h12];
+        if(td12==null && hl.dew_point_2m&&hl.dew_point_2m[h12]!=null) td12=hl.dew_point_2m[h12];
+        if(blhArr.length===0 && hl.boundary_layer_height&&hl.boundary_layer_height[h12]!=null) blhArr.push(hl.boundary_layer_height[h12]);
+        if(capeArr.length===0 && hl.cape&&hl.cape[h12]!=null) capeArr.push(hl.cape[h12]);
         if(hl.relative_humidity_2m&&hl.relative_humidity_2m[h12]!=null) rhArr.push(hl.relative_humidity_2m[h12]);
-        if(hl.boundary_layer_height&&hl.boundary_layer_height[h12]!=null) blhArr.push(hl.boundary_layer_height[h12]);
-        if(hl.cape&&hl.cape[h12]!=null) capeArr.push(hl.cape[h12]);
         if(hl.visibility&&hl.visibility[h12]!=null) visArr.push(hl.visibility[h12]);
-        if(hl.temperature_2m&&hl.temperature_2m[h12]!=null) t12=hl.temperature_2m[h12];
-        if(hl.dew_point_2m&&hl.dew_point_2m[h12]!=null) td12=hl.dew_point_2m[h12];
+
         var tmax=dl.temperature_2m_max[i]||15;
         var th=calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12);
         var date=new Date(dl.time[i]+'T12:00:00');
@@ -473,15 +523,12 @@ function loadWeather(){
           code: dl.weather_code[i]||0,
           tmax: Math.round(tmax),
           tmin: Math.round(dl.temperature_2m_min[i]||5),
-          wind: Math.round(dl.wind_speed_10m_max[i]||0),
+          wind: Math.round((dl.wind_speed_10m_max[i]||0) / 3.6 * 10) / 10, // m/s
           wdir: Math.round(dl.wind_direction_10m_dominant[i]||0),
-          // Srazky: hourly precipitation_probability @ 12Z, fallback daily max
           rain: (function(){
             var hp=hl.precipitation_probability&&hl.precipitation_probability[h12];
             var dp=dl.precipitation_probability_max&&dl.precipitation_probability_max[i];
-            // Pouzij maximum z obou zdroju
             var val=Math.max(hp||0, dp||0);
-            // Pokud je precipitation_sum > 0, minimalne 30%
             var ps=dl.precipitation_sum&&dl.precipitation_sum[i]||0;
             if(ps>0.5 && val<30) val=Math.max(val,30);
             if(ps>2 && val<50) val=Math.max(val,50);
@@ -489,7 +536,7 @@ function loadWeather(){
           })(),
           cloud:Math.round(dl.cloud_cover_mean[i]||50),
           vis:  visArr.length?Math.round(avg(visArr)/100)/10:15,
-          tb:th.tb, ts:th.ts, spread:th.spread, cape:th.cape, rh:th.rh,
+          tb:th.tb, ts:th.ts, tbMax:th.tbMax, wstar:th.wstar, spread:th.spread, cape:th.cape, rh:th.rh,
           cuLabel:th.cuLabel, cuColor:th.cuColor, cuProb:th.cuProb
         });
       }
@@ -501,9 +548,10 @@ function loadWeather(){
       render(); showApp();
     })
     .catch(function(e){
-      console.warn('API nedostupné, používám demo data:', e.message);
+      console.warn('API chyba, pouzivam demo data:', e.message);
       loadDemoData();
     });
+}
 }
 
 /* MODAL */
@@ -549,11 +597,11 @@ function useGPS(){
 function loadDemoData(){
   var today=new Date();
   var raw=[
-    {code:0, tmax:26,tmin:12, wind:12,wdir:210, rain:0,  cloud:30, vis:18000, rh:42, blh:1650, cape:780},
+    {code:0, tmax:26,tmin:12, wind:3.3,wdir:210, rain:0,  cloud:30, vis:18000, rh:42, blh:1650, cape:780},
     {code:1, tmax:29,tmin:13, wind:8, wdir:190, rain:0,  cloud:20, vis:20000, rh:35, blh:1950, cape:1100},
-    {code:3, tmax:21,tmin:11, wind:23,wdir:265, rain:25, cloud:65, vis:9000,  rh:68, blh:850,  cape:180},
-    {code:61,tmax:17,tmin:9,  wind:31,wdir:280, rain:80, cloud:90, vis:4000,  rh:85, blh:400,  cape:30},
-    {code:2, tmax:23,tmin:10, wind:10,wdir:205, rain:5,  cloud:28, vis:17000, rh:44, blh:1550, cape:620}
+    {code:3, tmax:21,tmin:11, wind:6.4,wdir:265, rain:25, cloud:65, vis:9000,  rh:68, blh:850,  cape:180},
+    {code:61,tmax:17,tmin:9,  wind:8.6,wdir:280, rain:80, cloud:90, vis:4000,  rh:85, blh:400,  cape:30},
+    {code:2, tmax:23,tmin:10, wind:2.8,wdir:205, rain:5,  cloud:28, vis:17000, rh:44, blh:1550, cape:620}
   ];
   days=[];
   raw.forEach(function(r,i){
@@ -567,7 +615,7 @@ function loadDemoData(){
       code:r.code, tmax:r.tmax, tmin:r.tmin,
       wind:r.wind, wdir:r.wdir, rain:r.rain, cloud:r.cloud,
       vis: Math.round(r.vis/100)/10,
-      tb:th.tb, ts:th.ts, spread:th.spread, cape:th.cape, rh:th.rh,
+      tb:th.tb, ts:th.ts, tbMax:th.tbMax, wstar:th.wstar, spread:th.spread, cape:th.cape, rh:th.rh,
       cuLabel:th.cuLabel, cuColor:th.cuColor, cuProb:th.cuProb
     });
   });
