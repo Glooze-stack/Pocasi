@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#f0f4f8">
+<title>Podrobný meteorogram — Půjdu plachtit?</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f4f8;color:#1a2540;font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+#loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;background:#f0f4f8}
+#app{display:none;max-width:520px;margin:0 auto;padding-bottom:60px}
+.spin{width:36px;height:36px;border:3px solid #dde3ed;border-top-color:#2563eb;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ltxt{font-size:11px;color:#64748b;letter-spacing:2px;text-transform:uppercase}
+header{padding:14px 18px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:0;background:rgba(255,255,255,.97);backdrop-filter:blur(14px);z-index:10;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.back{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;color:#1a2540;text-decoration:none;font-size:18px;flex-shrink:0}
+.htitle{font-size:16px;font-weight:800;color:#1a2540}
+.hloc{font-size:10px;color:#94a3b8;margin-top:1px;letter-spacing:.5px}
+.sec{padding:14px 18px 0}
+.slbl{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:12px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9}
+.row:last-child{border-bottom:none}
+.rlbl{font-size:12px;color:#64748b}
+.rsub{font-size:10px;color:#94a3b8;margin-top:1px}
+.rval{font-size:15px;font-weight:700;color:#1a2540}
+.runit{font-size:10px;color:#94a3b8;margin-left:2px;font-weight:400}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.info-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:10px;color:#0369a1;line-height:1.7;margin-top:12px}
+.demo-banner{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:10px;color:#9a3412;margin-bottom:14px;display:none}
+/* Glider selector */
+.glider-sel{display:flex;gap:8px;margin-bottom:4px}
+.gchip{flex:1;padding:9px 6px;border-radius:12px;border:1.5px solid #e2e8f0;background:#f8fafc;text-align:center;cursor:pointer;transition:all .15s}
+.gchip.on{border-color:#2563eb;background:#eff6ff}
+.gchip .gname{font-size:11px;font-weight:700;color:#1a2540}
+.gchip .gtype{font-size:9px;color:#94a3b8;margin-top:2px}
+.gchip.on .gname{color:#2563eb}
+/* Placeholders */
+.placeholder{background:#f8fafc;border:1.5px dashed #e2e8f0;border-radius:14px;padding:24px 16px;text-align:center;color:#94a3b8;font-size:12px;margin-bottom:12px}
+.placeholder .pi{font-size:28px;margin-bottom:8px}
+.placeholder .pt{font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px}
+.note{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:10px;color:#0369a1;line-height:1.7;margin-top:0}
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="spin"></div>
+  <div class="ltxt">Načítám data...</div>
+</div>
+<div id="app">
+  <header>
+    <a class="back" id="backlink" href="index.html">&#8592;</a>
+    <div>
+      <div class="htitle" id="htitle">Podrobný meteorogram</div>
+      <div class="hloc" id="hloc">...</div>
+    </div>
+  </header>
+
+  <div class="sec">
+    <div class="slbl">Typ větroně</div>
+    <div class="glider-sel" id="glider-sel">
+      <div class="gchip on" data-glider="blanik" onclick="selectGlider('blanik',this)">
+        <div class="gname">Blaník L-23</div>
+        <div class="gtype">Cvičný, 16m</div>
+      </div>
+      <div class="gchip" data-glider="vso10" onclick="selectGlider('vso10',this)">
+        <div class="gname">VSO-10</div>
+        <div class="gtype">Výkonný, 15m</div>
+      </div>
+      <div class="gchip" data-glider="asw19" onclick="selectGlider('asw19',this)">
+        <div class="gname">ASW-19</div>
+        <div class="gtype">Závodní, 15m</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div id="demo-banner" class="demo-banner">&#9888; DEMO DATA — API nedostupné, zobrazuji typické hodnoty</div>
+    <div class="slbl">Termika &amp; mezní vrstva</div>
+    <div class="card">
+      <div class="card-title">&#127755; Výpočty termiky</div>
+      <div id="thermal-rows"></div>
+      <div class="info-box">
+        Základna Cu: LCL = (T&minus;Td) &times; 120 m &nbsp;|&nbsp;
+        W* = Deardorff (1970): [g &times; H &times; zi / (To &times; &rho;cp)]<sup>1/3</sup>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">&#8635; Průměr stoupavého proudu</div>
+      <div id="thermal-width-rows"></div>
+      <div class="info-box">
+        Průměr termiků &asymp; 0.3 &times; BLH (Lenschow &amp; Stephens 1980).<br>
+        Min. průměr pro kroužení závisí na rychlosti a náklonu zvoleného větroně.
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="slbl">Meteorologické podmínky v 12:00 UTC</div>
+    <div class="card">
+      <div id="meteo-rows"></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="slbl">Připravujeme</div>
+    <div class="placeholder">
+      <div class="pi">&#128200;</div>
+      <div class="pt">Hodinový průběh dne</div>
+      <div>Graf termiky, základny Cu a stoupání po hodinách 6–20 UTC</div>
+    </div>
+    <div class="placeholder">
+      <div class="pi">&#127760;</div>
+      <div class="pt">Aerologický diagram</div>
+      <div>Teplotní profil, rosný bod, stabilita atmosféry</div>
+    </div>
+    <div class="placeholder">
+      <div class="pi">&#128681;</div>
+      <div class="pt">Větrná růžice</div>
+      <div>Směr a rychlost větru v různých hladinách</div>
+    </div>
+  </div>
+
+  <div class="sec" style="padding-bottom:20px">
+    <div class="note">
+      <b>Zdroj dat:</b> Open-Meteo best_match (DWD ICON-EU / ECMWF IFS / NOAA GFS)<br>
+      <b>Hodnoty platí pro:</b> 12:00 UTC &mdash; odpovídá 14:00 SELČ
+    </div>
+  </div>
+</div>
+
+<script>
+function el(id){return document.getElementById(id)}
+
+// Glider specs: [name, min_turn_speed_kmh, bank_deg, description]
+var GLIDERS = {
+  blanik: {name:'Blaník L-23', span:'16m', speed:80, bank:40, desc:'Cvičný dvoumístný'},
+  vso10:  {name:'VSO-10',      span:'15m', speed:78, bank:45, desc:'Výkonný jednomístný'},
+  asw19:  {name:'ASW-19',      span:'15m', speed:85, bank:45, desc:'Závodní jednomístný'}
+};
+var currentGlider = 'blanik';
+var cachedData = null;
+
+function minTurnRadius(g) {
+  var v = g.speed / 3.6;
+  var r = (v * v) / (9.81 * Math.tan(g.bank * Math.PI / 180));
+  return Math.round(r);
+}
+function minTurnDiameter(g) { return minTurnRadius(g) * 2; }
+
+function selectGlider(key, el_chip) {
+  currentGlider = key;
+  document.querySelectorAll('.gchip').forEach(function(c){c.classList.remove('on')});
+  el_chip.classList.add('on');
+  if(cachedData) renderAll(cachedData);
+}
+
+// Parse URL params
+var params = new URLSearchParams(window.location.search);
+var dayIdx = parseInt(params.get('day')||'0');
+var lat    = parseFloat(params.get('lat')||'49.2489');
+var lon    = parseFloat(params.get('lon')||'14.7203');
+var name   = decodeURIComponent(params.get('name')||'Letiště Soběslav');
+
+el('hloc').textContent = name;
+el('backlink').href = 'index.html';
+
+var wdirs=['S','SSV','SV','VSV','V','VJV','JV','JJV','J','JJZ','JZ','ZJZ','Z','ZSZ','SZ','SSZ'];
+
+function row(label, value, unit, sub) {
+  return '<div class="row">'
+    +'<div><div class="rlbl">'+label+'</div>'+(sub?'<div class="rsub">'+sub+'</div>':'')+'</div>'
+    +'<div style="text-align:right"><span class="rval">'+value+'</span>'
+    +(unit?'<span class="runit">'+unit+'</span>':'')+'</div>'
+    +'</div>';
+}
+
+function renderAll(d) {
+  var g = GLIDERS[currentGlider];
+  var minDiam = minTurnDiameter(g);
+  var r = minTurnRadius(g);
+
+  // LCL
+  var K=120;
+  var sp12 = Math.max(0, d.t12 - d.td12);
+  var spMax = Math.max(sp12, d.maxSpread);
+  var tb12 = Math.round(sp12 * K);
+  var tbMax = Math.round(spMax * K);
+
+  // W*
+  var g_rho=9.81/1200, ToK=d.t12+273.15;
+  var zi=(d.blh>200&&d.blh<4000)?d.blh:tb12*0.7;
+  var H=0.27*d.sw, wstar=0;
+  if(d.sw>50&&zi>200) wstar=Math.pow(g_rho*H*zi/ToK,1/3);
+  else if(d.cape>0)   wstar=0.4*Math.pow(d.cape,1/3);
+  else                wstar=0.8;
+  wstar=Math.max(0,Math.min(6,Math.round(wstar*10)/10));
+
+  // ts
+  var ts=Math.min(spMax/4,1.5)+(d.tmax>=28?1.5:d.tmax>=22?1.0:d.tmax>=16?0.5:0)+Math.min(d.cape/500,1.5);
+  ts=Math.min(5,Math.max(0,ts));
+
+  // Cu
+  var cuLabel,cuColor;
+  if(d.tmax<12||ts<0.5)         {cuLabel='Ne';cuColor='#ff3d5a';}
+  else if(sp12<8&&ts>=1.5)      {cuLabel='Ano';cuColor='#00e676';}
+  else if(sp12<12&&ts>=1.0)     {cuLabel='Možná';cuColor='#ffd740';}
+  else if(sp12>=12)             {cuLabel='Bezoblačná termika';cuColor='#5badff';}
+  else                          {cuLabel='Málo';cuColor='#ff9100';}
+
+  // Thermal diameter
+  var dTyp = Math.round(0.30 * zi);
+  var dMin = Math.round(0.20 * zi);
+  var dMax = Math.round(0.45 * zi);
+  var ok = dTyp >= minDiam;
+  var okStr = ok
+    ? '<span style="color:#16a34a;font-weight:700">&#10003; Vhodné pro '+g.name+'</span>'
+    : '<span style="color:#ff9100;font-weight:700">&#9888; Úzké pro '+g.name+'</span>';
+
+  el('thermal-rows').innerHTML =
+    row('Základna Cu v 12Z', tb12, 'm', 'spread '+sp12.toFixed(1)+'°C × 120')
+   +row('Max základna dne', tbMax, 'm', 'max spread '+spMax.toFixed(1)+'°C × 120')
+   +row('Průměrné stoupání W*', wstar, 'm/s', 'SW='+Math.round(d.sw)+' W/m², zi='+Math.round(zi)+'m')
+   +row('Síla termiky ts', ts.toFixed(1), '/ 5.0', '')
+   +row('Cu oblaky', '<span class="badge" style="background:'+cuColor+'22;color:'+cuColor+'">'+cuLabel+'</span>', '', '')
+   +row('CAPE', Math.round(d.cape), 'J/kg', '')
+   +row('BLH', Math.round(d.blh), 'm', 'výška mezní vrstvy (zi='+Math.round(zi)+'m)');
+
+  el('thermal-width-rows').innerHTML =
+    row('Typický průměr termiků', dTyp, 'm', '0.30 × zi ('+Math.round(zi)+'m)')
+   +row('Rozsah průměrů', dMin+'–'+dMax, 'm', '0.20–0.45 × zi')
+   +row('Min. průměr pro '+g.name, minDiam, 'm',
+       g.speed+'km/h, '+g.bank+'° náklon → r='+r+'m')
+   +row('Vyhodnocení', okStr, '', dTyp+'m vs. min '+minDiam+'m');
+
+  var wdirStr = wdirs[Math.round((d.wdir||0)/22.5)%16];
+  el('meteo-rows').innerHTML =
+    row('Teplota 2m', d.t12.toFixed(1), '°C', 'v 12:00 UTC')
+   +row('Rosný bod', d.td12.toFixed(1), '°C', 'v 12:00 UTC')
+   +row('Relativní vlhkost', Math.round(d.rh), '%', 'v 12:00 UTC')
+   +row('Spread T−Td', sp12.toFixed(1), '°C', 'v 12:00 UTC')
+   +row('Globální záření', Math.round(d.sw), 'W/m²', 'v 12:00 UTC')
+   +row('Dohlednost', Math.round(d.vis/1000*10)/10, 'km', 'v 12:00 UTC')
+   +row('Vítr (max dne)', d.wind, 'm/s '+wdirStr, 'denní maximum')
+   +row('Oblačnost', Math.round(d.cloud), '%', 'denní průměr')
+   +row('Srážky', Math.round(d.rain), '%', 'max pravděp. dne');
+}
+
+function makeDemoData() {
+  // Realistic demo for a good soaring day
+  return {
+    t12:21.0, td12:7.0, rh:46, blh:1500, cape:650, sw:680,
+    vis:18000, wind:3.3, wdir:210, cloud:32, rain:0,
+    tmax:26, maxSpread:19.0
+  };
+}
+
+function loadDetail() {
+  var url = 'https://api.open-meteo.com/v1/forecast'
+    +'?latitude='+lat+'&longitude='+lon
+    +'&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max'
+    +',wind_direction_10m_dominant,precipitation_probability_max,cloud_cover_mean'
+    +'&hourly=temperature_2m,dew_point_2m,relative_humidity_2m,boundary_layer_height'
+    +',cape,shortwave_radiation,visibility,precipitation_probability'
+    +'&wind_speed_unit=kmh&timezone=UTC&forecast_days=5';
+
+  fetch(url)
+    .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+    .then(function(data){
+      var dl=data.daily, hl=data.hourly;
+      var i=Math.min(dayIdx, dl.time.length-1);
+      var h0=i*24, target12=dl.time[i]+'T12:00', h12=h0+12;
+      if(hl.time){for(var hi=h0;hi<h0+24&&hi<hl.time.length;hi++){if(hl.time[hi]&&hl.time[hi].indexOf(target12)===0){h12=hi;break;}}}
+
+      var maxSpread=0;
+      for(var hh=h0+6;hh<h0+21&&hh<hl.temperature_2m.length;hh++){
+        var sp=hl.temperature_2m[hh]-hl.dew_point_2m[hh];
+        if(sp>maxSpread)maxSpread=sp;
+      }
+
+      var days=['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+      var date=new Date(dl.time[i]+'T12:00:00');
+      el('htitle').textContent=(i===0?'Dnes':i===1?'Zítra':days[date.getDay()])+' — '+dl.time[i];
+
+      cachedData = {
+        t12:  hl.temperature_2m[h12],
+        td12: hl.dew_point_2m[h12],
+        rh:   hl.relative_humidity_2m[h12]||60,
+        blh:  hl.boundary_layer_height[h12]||0,
+        cape: hl.cape[h12]||0,
+        sw:   hl.shortwave_radiation[h12]||0,
+        vis:  hl.visibility[h12]||15000,
+        wind: Math.round((dl.wind_speed_10m_max[i]||0)/3.6*10)/10,
+        wdir: Math.round(dl.wind_direction_10m_dominant[i]||0),
+        cloud:Math.round(dl.cloud_cover_mean[i]||50),
+        rain: Math.round(dl.precipitation_probability_max[i]||0),
+        tmax: dl.temperature_2m_max[i]||15,
+        maxSpread: maxSpread
+      };
+      renderAll(cachedData);
+      el('loading').style.display='none';
+      el('app').style.display='block';
+    })
+    .catch(function(){
+      // Fallback to demo data
+      cachedData = makeDemoData();
+      el('htitle').textContent = 'Demo — typický letní den';
+      el('demo-banner').style.display='block';
+      renderAll(cachedData);
+      el('loading').style.display='none';
+      el('app').style.display='block';
+    });
+}
+
+loadDetail();
+</script>
+</body>
+</html>
