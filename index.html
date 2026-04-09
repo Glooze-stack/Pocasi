@@ -472,11 +472,17 @@ function loadWeather(){
     +'&hourly=temperature_2m,dew_point_2m,boundary_layer_height,cape'
     +'&timezone=UTC&forecast_days=5&models=icon_d2';
 
-  Promise.all([fetch(urlMain), fetch(urlTherm)])
-    .then(function(responses){
-      if(!responses[0].ok) return responses[0].text().then(function(t){throw new Error(responses[0].status+': '+t.slice(0,150));});
-      return Promise.all([responses[0].json(), responses[1].ok ? responses[1].json() : null]);
-    })
+  // Fetch oba URL paralelne, icon_d2 je volitelny (muze selhat)
+  var p1 = fetch(urlMain).then(function(r){
+    if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t.slice(0,100));});
+    return r.json();
+  });
+  var p2 = fetch(urlTherm).then(function(r){
+    if(!r.ok) return null;
+    return r.json();
+  }).catch(function(){ return null; }); // icon_d2 selhani = null, nevadi
+
+  Promise.all([p1, p2])
     .then(function(results){
       var data=results[0], dataTherm=results[1];
       var dl=data.daily, hl=data.hourly, n=dl.time.length;
