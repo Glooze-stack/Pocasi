@@ -217,29 +217,33 @@ function avg(a){var s=0,n=0;for(var i=0;i<a.length;i++){if(a[i]!=null&&!isNaN(a[
 function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12) {
   var rh = rhArr.length ? avg(rhArr) : 60;
 
-  // Spread T-Td: pro maximalni zakladnu dne pouzij TMAX a rosny bod z 12Z
-  // Rosny bod se pres den meni malo, tmax nastava odpoledne
-  // Toto dava maximalni LCL dne - co vetronare zajima
+  // LCL zakladna: pouzij T(12Z) - Td(12Z) pro zakladnu ve 12Z
+  // Rosny bod je relativne stabilni pres den
   var spread;
-  if(td12!=null) {
-    spread = tmax - td12;  // tmax - Td(12Z) = maximalni spread dne
+  if(t12!=null && td12!=null) {
+    spread = t12 - td12;           // presny spread ve 12Z
   } else if(t12!=null) {
-    // odhad: RH v 12Z, ale teplota = tmax
-    spread = tmax - (t12 - (100-rh)/5);
+    spread = (100 - rh) / 5;       // odhad spreadu z RH (Alduchov-Eskridge)
   } else {
-    spread = tmax - (tmax - (100-rh)/5);
+    spread = (100 - rh) / 5;
   }
   spread = Math.max(0, spread);
 
-  // Základna Cu (LCL): standardni vzorec pouzivany vetronari
-  // LCL (m) = (T - Td) * 122  ... pro maximalni denni zakladnu
+  // Maximalni zakladna odpoledne = (Tmax - Td12Z) * 122
+  var spreadMax = (td12!=null) ? Math.max(0, tmax - td12) : spread + (tmax - (t12||tmax));
+  spreadMax = Math.max(spread, spreadMax);
+
+  // LCL ve 12Z (m) = spread * 122
   var tbBySpread = Math.round(spread * 122);
+  // Max LCL dne (odpoledne)
+  var tbMax = Math.round(spreadMax * 122);
 
   // Pouzij boundary layer height pokud je k dispozici a rozumna
   var blhVal = blhArr.length ? avg(blhArr) : 0;
   var tbByBlh = (blhVal > 200 && blhVal < 5000) ? Math.round(blhVal) : 0;
 
-  var tb = tbByBlh > 300 ? tbByBlh : tbBySpread;
+  // Zakladna: BLH pokud dostupna, jinak max z LCL12Z a LCLmax
+  var tb = tbByBlh > 300 ? tbByBlh : Math.max(tbBySpread, tbMax);
   tb = Math.max(150, Math.min(3500, tb));
 
   // Síla termiky 0-5
