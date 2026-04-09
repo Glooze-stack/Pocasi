@@ -214,7 +214,7 @@ function avg(a){var s=0,n=0;for(var i=0;i<a.length;i++){if(a[i]!=null&&!isNaN(a[
    T_rosny_bod se odhaduje z relativni vlhkosti: Td = T - (100-RH)/5
    Spread = T - Td = (100 - RH) / 5
    Zakladna = spread * 122                                          */
-function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12) {
+function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12, tdBest, tBest) {
   var rh = rhArr.length ? avg(rhArr) : 60;
 
   // LCL zakladna: pouzij T(12Z) - Td(12Z) pro zakladnu ve 12Z
@@ -233,14 +233,19 @@ function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12) {
   var spreadMax = (td12!=null) ? Math.max(0, tmax - td12) : spread + (tmax - (t12||tmax));
   spreadMax = Math.max(spread, spreadMax);
 
-  // LCL zakladna Cu: VZDY z fyzikalniho vzorce T-Td, nikdy BLH
-  // BLH (mezni vrstva) != LCL (zakladna Cu) - jsou to ruzne veliciny!
-  // LCL ve 12Z - zakladna v dobe mereni
+  // LCL zakladna Cu: VZDY z fyzikalniho vzorce T-Td
+  // LCL ve 12Z
   var tbBySpread = Math.round(spread * 122);
-  // LCL odpoledni maximum = (Tmax - Td12Z) * 122
+  // LCL odpoledni max z (Tmax - Td12Z)
   var tbMax = Math.round(spreadMax * 122);
-  // Zobrazujeme maximalni denni zakladnu
-  var tb = Math.max(tbBySpread, tbMax);
+  // Max LCL z nejlepsiho denniho spreadu (min Td + max T odpoledne)
+  var tbBest = 0;
+  if(tdBest!=null && tBest!=null){
+    var spreadBest = Math.max(0, tBest - tdBest);
+    tbBest = Math.round(spreadBest * 122);
+  }
+  // Zobrazujeme maximum ze vsech metod
+  var tb = Math.max(tbBySpread, tbMax, tbBest);
   tb = Math.max(150, Math.min(3800, tb));
 
   // BLH pouzijeme POUZE pro silu termiky (ne pro zakladnu)
@@ -448,6 +453,11 @@ function render(){
     +'<div class="gb"><div class="gl">Srážky</div>'
       +'<div><span class="gv" style="color:'+rc+'">'+d.rain+'</span><span class="gu">%</span></div>'
       +bar(d.rain,'#ff3d5a')+'</div>'
+    +'</div>'
+    +'<div style="margin-top:11px;padding:9px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;font-size:10px;color:#0369a1;line-height:1.7">'
+      +'<b>Hodnoty platí pro 12:00 UTC (14:00 SELČ)</b><br>'
+      +'Zdroj: <b>Open-Meteo</b> &mdash; best_match (DWD ICON-EU / ECMWF IFS / NOAA GFS)<br>'
+      +'Základna Cu: fyzikální vzorec LCL = (T&minus;Td)&times;122 m &nbsp;|&nbsp; Max základna: nejnižší Td dne (6&ndash;20 UTC)'
     +'</div>';
 }
 
@@ -476,7 +486,8 @@ function loadWeather(){
       days=[];
       for(var i=0;i<n;i++){
         var h0=i*24;
-        // Najdi presny index pro 12:00 UTC daneho dne podle hl.time
+
+        // Najdi presny index pro 12:00 UTC
         var target12 = dl.time[i]+'T12:00';
         var h12 = h0+12;
         if(hl.time) {
@@ -484,6 +495,20 @@ function loadWeather(){
             if(hl.time[hi]&&hl.time[hi].indexOf(target12)===0){h12=hi;break;}
           }
         }
+
+        // Pro max zakladnu: prochazej VSECHNY hodiny dne (6-20 UTC = 8-22 SELC)
+        // Max LCL = hodina s nejvyssim spreadem = nejnizsi Td + nejvyssi T
+        var tdMin = null; // nejnizsi rosny bod dne
+        var tMax12to18 = null; // nejvyssi teplota 12-18 UTC (odpoledni max)
+        for(var hi=h0+6; hi<h0+21 && hi<(hl.dew_point_2m||[]).length; hi++){
+          var tdH = hl.dew_point_2m&&hl.dew_point_2m[hi];
+          var tH  = hl.temperature_2m&&hl.temperature_2m[hi];
+          if(tdH!=null && (tdMin===null || tdH < tdMin)) tdMin = tdH;
+          if(tH!=null && hi>=h0+12 && hi<=h0+18){
+            if(tMax12to18===null || tH > tMax12to18) tMax12to18 = tH;
+          }
+        }
+
         var rhArr=[], blhArr=[], capeArr=[], visArr=[];
         var t12=null, td12=null;
         if(hl.temperature_2m&&hl.temperature_2m[h12]!=null) t12=hl.temperature_2m[h12];
@@ -492,9 +517,12 @@ function loadWeather(){
         if(hl.cape&&hl.cape[h12]!=null) capeArr.push(hl.cape[h12]);
         if(hl.relative_humidity_2m&&hl.relative_humidity_2m[h12]!=null) rhArr.push(hl.relative_humidity_2m[h12]);
         if(hl.visibility&&hl.visibility[h12]!=null) visArr.push(hl.visibility[h12]);
+        // Pouzij nejnizsi Td dne a nejvetsi T 12-18Z pro max LCL
+        var tdBest = (tdMin!==null) ? tdMin : td12;
+        var tBest  = (tMax12to18!==null) ? tMax12to18 : (dl.temperature_2m_max[i]||15);
 
         var tmax=dl.temperature_2m_max[i]||15;
-        var th=calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12);
+        var th=calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12, tdBest, tBest);
         var date=new Date(dl.time[i]+'T12:00:00');
         var dow=date.getDay();
         days.push({
