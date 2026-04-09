@@ -466,28 +466,14 @@ function loadWeather(){
     +'&hourly=relative_humidity_2m,dew_point_2m,temperature_2m,boundary_layer_height,cape,visibility,precipitation_probability'
     +'&wind_speed_unit=kmh&timezone=UTC&forecast_days=5';
 
-  // URL 2: icon_d2 - vysoka presnost pro termiku ve stredni Evrope
-  var urlTherm='https://api.open-meteo.com/v1/forecast'
-    +'?latitude='+lat+'&longitude='+lon
-    +'&hourly=temperature_2m,dew_point_2m,boundary_layer_height,cape'
-    +'&timezone=UTC&forecast_days=5&models=icon_d2';
-
-  // Fetch oba URL paralelne, icon_d2 je volitelny (muze selhat)
-  var p1 = fetch(urlMain).then(function(r){
-    if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t.slice(0,100));});
-    return r.json();
-  });
-  var p2 = fetch(urlTherm).then(function(r){
-    if(!r.ok) return null;
-    return r.json();
-  }).catch(function(){ return null; }); // icon_d2 selhani = null, nevadi
-
-  Promise.all([p1, p2])
-    .then(function(results){
-      var data=results[0], dataTherm=results[1];
+  // Jeden fetch - best_match ma BLH, CAPE, dew_point pro celou Evropu
+  fetch(urlMain)
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t.slice(0,100));});
+      return r.json();
+    })
+    .then(function(data){
       var dl=data.daily, hl=data.hourly, n=dl.time.length;
-      // Pokud mame icon_d2 data, pouzijeme je pro termiku
-      var hlT = (dataTherm && dataTherm.hourly) ? dataTherm.hourly : null;
 
       days=[];
       for(var i=0;i<n;i++){
@@ -502,18 +488,10 @@ function loadWeather(){
         }
         var rhArr=[], blhArr=[], capeArr=[], visArr=[];
         var t12=null, td12=null;
-        // Termicke hodnoty: preferuj icon_d2, fallback best_match
-        if(hlT) {
-          if(hlT.temperature_2m&&hlT.temperature_2m[h12]!=null) t12=hlT.temperature_2m[h12];
-          if(hlT.dew_point_2m&&hlT.dew_point_2m[h12]!=null) td12=hlT.dew_point_2m[h12];
-          if(hlT.boundary_layer_height&&hlT.boundary_layer_height[h12]!=null) blhArr.push(hlT.boundary_layer_height[h12]);
-          if(hlT.cape&&hlT.cape[h12]!=null) capeArr.push(hlT.cape[h12]);
-        }
-        // Fallback na best_match pokud icon_d2 nema data
-        if(t12==null && hl.temperature_2m&&hl.temperature_2m[h12]!=null) t12=hl.temperature_2m[h12];
-        if(td12==null && hl.dew_point_2m&&hl.dew_point_2m[h12]!=null) td12=hl.dew_point_2m[h12];
-        if(blhArr.length===0 && hl.boundary_layer_height&&hl.boundary_layer_height[h12]!=null) blhArr.push(hl.boundary_layer_height[h12]);
-        if(capeArr.length===0 && hl.cape&&hl.cape[h12]!=null) capeArr.push(hl.cape[h12]);
+        if(hl.temperature_2m&&hl.temperature_2m[h12]!=null) t12=hl.temperature_2m[h12];
+        if(hl.dew_point_2m&&hl.dew_point_2m[h12]!=null) td12=hl.dew_point_2m[h12];
+        if(hl.boundary_layer_height&&hl.boundary_layer_height[h12]!=null) blhArr.push(hl.boundary_layer_height[h12]);
+        if(hl.cape&&hl.cape[h12]!=null) capeArr.push(hl.cape[h12]);
         if(hl.relative_humidity_2m&&hl.relative_humidity_2m[h12]!=null) rhArr.push(hl.relative_humidity_2m[h12]);
         if(hl.visibility&&hl.visibility[h12]!=null) visArr.push(hl.visibility[h12]);
 
