@@ -233,26 +233,24 @@ function calcThermal(tmax, rhArr, blhArr, capeArr, t12, td12) {
   var spreadMax = (td12!=null) ? Math.max(0, tmax - td12) : spread + (tmax - (t12||tmax));
   spreadMax = Math.max(spread, spreadMax);
 
-  // LCL ve 12Z (m) = spread * 122
+  // LCL zakladna Cu: VZDY z fyzikalniho vzorce T-Td, nikdy BLH
+  // BLH (mezni vrstva) != LCL (zakladna Cu) - jsou to ruzne veliciny!
+  // LCL ve 12Z - zakladna v dobe mereni
   var tbBySpread = Math.round(spread * 122);
-  // Max LCL dne (odpoledne)
+  // LCL odpoledni maximum = (Tmax - Td12Z) * 122
   var tbMax = Math.round(spreadMax * 122);
+  // Zobrazujeme maximalni denni zakladnu
+  var tb = Math.max(tbBySpread, tbMax);
+  tb = Math.max(150, Math.min(3800, tb));
 
-  // Pouzij boundary layer height pokud je k dispozici a rozumna
-  var blhVal = blhArr.length ? avg(blhArr) : 0;
-  var tbByBlh = (blhVal > 200 && blhVal < 5000) ? Math.round(blhVal) : 0;
-
-  // Zakladna: BLH pokud dostupna, jinak max z LCL12Z a LCLmax
-  var tb = tbByBlh > 300 ? tbByBlh : Math.max(tbBySpread, tbMax);
-  tb = Math.max(150, Math.min(3500, tb));
-
-  // Síla termiky 0-5
+  // BLH pouzijeme POUZE pro silu termiky (ne pro zakladnu)
   var cape = capeArr.length ? avg(capeArr) : 0;
-  var tsSpread = Math.min(spread / 3.5, 1.5);
+  var blhVal = blhArr.length ? avg(blhArr) : 0;
+  var tsSpread = Math.min(spreadMax / 4.0, 1.5);
   var tsTemp   = tmax >= 28 ? 1.5 : tmax >= 22 ? 1.0 : tmax >= 16 ? 0.5 : 0;
-  var tsCape   = Math.min(cape / 600, 1.5);
-  var tsBlh    = tbByBlh > 300 ? Math.min(tbByBlh / 800, 1.5) : 0;
-  var ts = tsSpread + tsTemp + (tsBlh > 0 ? tsBlh : tsCape);
+  var tsCape   = Math.min(cape / 500, 1.5);
+  var tsBlh    = (blhVal > 500 && blhVal < 4000) ? Math.min(blhVal / 1000, 1.5) : 0;
+  var ts = tsSpread + tsTemp + (tsCape > tsBlh ? tsCape : tsBlh);
   ts = Math.max(0, Math.min(5, ts));
 
   // Predikce Cu oblaku
