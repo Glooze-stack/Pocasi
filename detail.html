@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#f0f4f8">
+<title>Podrobný meteorogram — Půjdu plachtit?</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f4f8;color:#1a2540;font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+#loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;background:#f0f4f8}
+#app{display:none;max-width:520px;margin:0 auto;padding-bottom:60px}
+.spin{width:36px;height:36px;border:3px solid #dde3ed;border-top-color:#2563eb;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ltxt{font-size:11px;color:#64748b;letter-spacing:2px;text-transform:uppercase}
+header{padding:14px 18px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,.07);position:sticky;top:0;background:rgba(255,255,255,.97);backdrop-filter:blur(14px);z-index:10;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.back{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;color:#1a2540;text-decoration:none;font-size:18px;flex-shrink:0}
+.htitle{font-size:16px;font-weight:800;color:#1a2540}
+.hloc{font-size:10px;color:#94a3b8;margin-top:1px;letter-spacing:.5px}
+.sec{padding:14px 18px 0}
+.slbl{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:12px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9}
+.row:last-child{border-bottom:none}
+.rlbl{font-size:12px;color:#64748b}
+.rsub{font-size:10px;color:#94a3b8;margin-top:1px}
+.rval{font-size:15px;font-weight:700;color:#1a2540}
+.runit{font-size:10px;color:#94a3b8;margin-left:2px;font-weight:400}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.info-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:10px;color:#0369a1;line-height:1.7;margin-top:12px}
+.demo-banner{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:10px;color:#9a3412;display:none}
+.gchip{flex:1;padding:9px 6px;border-radius:12px;border:1.5px solid #e2e8f0;background:#f8fafc;text-align:center;cursor:pointer;transition:all .15s}
+.gchip.on{border-color:#2563eb;background:#eff6ff}
+.gchip .gname{font-size:11px;font-weight:700;color:#1a2540}
+.gchip .gtype{font-size:9px;color:#94a3b8;margin-top:2px}
+.gchip.on .gname{color:#2563eb}
+.day-chip{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+padding:8px 4px;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;
+cursor:pointer;color:inherit;outline:none;transition:all .18s}
+.day-chip.on{background:#eff6ff;border-color:#2563eb}
+.day-chip:hover{border-color:#93c5fd}
+.dc-name{font-size:10px;font-weight:700;color:#1a2540}
+.dc-date{font-size:9px;color:#94a3b8}
+.note{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:10px;color:#0369a1;line-height:1.7;margin-top:0}
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="spin"></div>
+  <div class="ltxt">Načítám data...</div>
+</div>
+<div id="app">
+  <header>
+    <a class="back" id="backlink" href="index.html">&#8592;</a>
+    <div>
+      <div class="htitle" id="htitle">Podrobný meteorogram</div>
+      <div class="hloc" id="hloc">...</div>
+    </div>
+  </header>
+
+  <div id="demo-banner" class="demo-banner" style="margin:10px 18px 0">&#9888; DEMO DATA — API nedostupné</div>
+
+  <!-- Day picker strip -->
+  <div class="sec" style="padding-bottom:0">
+    <div class="slbl">Vyberte den</div>
+    <div id="day-strip" style="display:flex;gap:6px"></div>
+  </div>
+
+  <!-- 1. Thermogram -->
+  <div class="sec">
+    <div class="slbl">Hodinový meteorogram dne</div>
+    <div class="card" style="padding:12px 8px 8px">
+      <div class="card-title" style="padding-left:8px">&#9729; Rychlost stoupání &amp; výška mezní vrstvy</div>
+      <div style="font-size:9px;color:#94a3b8;padding-left:8px;margin-bottom:8px">Barvy = W* (m/s) · Černá čára = BLH · Růžová čára = Základna Cu</div>
+      <canvas id="thermo-canvas" style="width:100%;display:block;border-radius:8px"></canvas>
+      <div id="thermo-legend" style="display:flex;gap:4px;margin-top:8px;padding:0 8px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+
+  <!-- 2. Termika & mezní vrstva (merged with width) -->
+  <div class="sec">
+    <div class="slbl">Termika &amp; mezní vrstva</div>
+    <div class="card">
+      <div class="card-title">&#127755; Výpočty termiky</div>
+      <div id="thermal-rows"></div>
+      <div id="thermal-width-rows"></div>
+      <div class="info-box" style="margin-top:10px">
+        Základna Cu: LCL=(T&minus;Td)&times;120 m &nbsp;|&nbsp; W*=Deardorff (1970)<br>
+        Průměr termiků &asymp; 0.3 &times; BLH (Lenschow &amp; Stephens 1980)
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Meteo conditions -->
+  <div class="sec">
+    <div class="slbl">Meteorologické podmínky ve 12:00</div>
+    <div class="card">
+      <div id="meteo-rows"></div>
+    </div>
+  </div>
+
+  <!-- 4. Wind rose with altitude slider -->
+  <div class="sec">
+    <div class="slbl">Větrná růžice</div>
+    <div class="card" style="padding:12px 8px 8px">
+      <div class="card-title" style="padding-left:8px">&#128681; Vítr přes den (6–20 hod)</div>
+      <div style="padding:4px 8px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:10px;color:#64748b;font-weight:600">Čas:</span>
+          <span id="wind-time-label" style="font-size:11px;font-weight:800;color:#2563eb">12:00</span>
+        </div>
+        <input type="range" id="wind-time-slider" min="6" max="18" value="12" step="1"
+          style="width:100%;accent-color:#2563eb" oninput="onWindTimeChange(this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px">
+          <span>06</span><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#94a3b8;padding-left:8px;margin-bottom:8px">Délka šipky = rychlost · Barva = výšková hladina</div>
+      <div style="display:flex;justify-content:center">
+        <canvas id="wind-canvas" style="display:block"></canvas>
+      </div>
+      <div id="wind-legend" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;justify-content:center"></div>
+    </div>
+  </div>
+
+  <!-- 5. Skew-T -->
+  <div class="sec">
+    <div class="slbl">Teplotní profil (Skew-T)</div>
+    <div class="card" style="padding:12px 8px 8px">
+      <div class="card-title" style="padding-left:8px">&#127777; Teplota &amp; rosný bod</div>
+      <div style="padding:4px 8px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:10px;color:#64748b;font-weight:600">Čas:</span>
+          <span id="skewt-time-label" style="font-size:11px;font-weight:800;color:#2563eb">12:00</span>
+        </div>
+        <input type="range" id="skewt-slider" min="6" max="18" value="12" step="1"
+          style="width:100%;accent-color:#2563eb" oninput="onSkewtTimeChange(this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px">
+          <span>06</span><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#94a3b8;padding-left:8px;margin-bottom:8px">&#128308; teplota &nbsp;&#128309; rosný bod &nbsp;&#128994; suchá adiabata &nbsp;&#11044; LCL</div>
+      <canvas id="skewtlogp-canvas" style="width:100%;display:block;border-radius:8px"></canvas>
+      <div id="skewtlogp-legend" style="padding:8px;font-size:9px;color:#64748b;line-height:1.8"></div>
+    </div>
+  </div>
+
+  <div class="sec" style="padding-bottom:20px">
+    <div class="note">
+      <b>Zdroj dat:</b> Open-Meteo best_match (DWD ICON-EU / ECMWF IFS / NOAA GFS)<br>
+      <b>Hodnoty platí pro:</b> 12:00 hod &mdash; odpovídá 14:00 SELČ
+    </div>
+  </div>
+</div>
+<script>
+function el(id){return document.getElementById(id)}
+
+window.onerror=function(msg,src,line){
+  var lb=document.getElementById('loading');
+  if(lb)lb.innerHTML='<div style="color:#ff3d5a;font-size:13px;padding:20px;text-align:center">&#9888; '+msg+'<br><span style="font-size:10px;color:#94a3b8">řádek '+line+'</span></div>';
+  return true;
+};
+
+var params=new URLSearchParams(window.location.search);
+var dayIdx=parseInt(params.get('day')||'0');
+var lat=parseFloat(params.get('lat')||'49.2489');
+var lon=parseFloat(params.get('lon')||'14.7203');
+var locName=decodeURIComponent(params.get('name')||'Letiště Soběslav');
+el('hloc').textContent=locName;
+
+var allDaysData=null, cachedData=null, currentWindAlt=0;
+
+var WIND_ALT_LABELS=['10 m (povrch)','100 m','~500 m','~1000 m','~1500 m','~3000 m'];
+var WIND_ALT_KEYS=['wind_speed_10m','wind_speed_100m','wind_speed_10m','wind_speed_900hPa','wind_speed_850hPa','wind_speed_700hPa'];
+var WIND_DIR_KEYS=['wind_direction_10m','wind_direction_100m','wind_direction_10m','wind_direction_900hPa','wind_direction_850hPa','wind_direction_700hPa'];
+
+function row(label, value, unit, sub) {
+  return '<div class="row">'
+    +'<div><div class="rlbl">'+label+'</div>'+(sub?'<div class="rsub">'+sub+'</div>':'')+'</div>'
+    +'<div style="text-align:right"><span class="rval">'+value+'</span>'
+    +(unit?'<span class="runit">'+unit+'</span>':'')+'</div>'
+    +'</div>';
+}
+
+// ── COLOUR SCALE for W* ──────────────────────────────────────────────────────
+var WSTAR_COLORS=[[0,'#e0f2fe'],[0.4,'#bae6fd'],[0.8,'#60a5fa'],[1.2,'#34d399'],[1.6,'#86efac'],[2.0,'#fde68a'],[2.4,'#fbbf24'],[2.8,'#f97316'],[3.2,'#ef4444']];
+function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function lerp(a,b,t){return a+(b-a)*t}
+function wstarColorSmooth(w){
+  w=Math.max(0,Math.min(3.4,w));
+  for(var i=0;i<WSTAR_COLORS.length-1;i++){
+    if(w>=WSTAR_COLORS[i][0]&&w<=WSTAR_COLORS[i+1][0]){
+      var t=(w-WSTAR_COLORS[i][0])/(WSTAR_COLORS[i+1][0]-WSTAR_COLORS[i][0]);
+      var c1=hexToRgb(WSTAR_COLORS[i][1]),c2=hexToRgb(WSTAR_COLORS[i+1][1]);
+      return 'rgb('+Math.round(lerp(c1[0],c2[0],t))+','+Math.round(lerp(c1[1],c2[1],t))+','+Math.round(lerp(c1[2],c2[2],t))+')';
+    }
+  }
+  return WSTAR_COLORS[WSTAR_COLORS.length-1][1];
+}
+function wstarAtHeight(ws,z,zi){
+  if(z<=0||z>=zi||zi<=0)return 0;
+  var zn=z/zi;
+  return Math.max(0,ws*Math.pow(zn,1/3)*Math.pow(1-zn,2/3)*1.8);
+}
+
+// ── THERMOGRAM ────────────────────────────────────────────────────────────────
+function drawThermoCanvas(hours,blhArr,cuBaseArr,wstarArr,windSpArr,windDirArr,cloudLowArr,cloudMidArr,cloudHighArr,precipArr,wCodeArr){
+  cloudLowArr=cloudLowArr||hours.map(function(){return 0});
+  cloudMidArr=cloudMidArr||hours.map(function(){return 0});
+  cloudHighArr=cloudHighArr||hours.map(function(){return 0});
+  precipArr=precipArr||hours.map(function(){return 0});
+  wCodeArr=wCodeArr||hours.map(function(){return 0});
+  var canvas=el('thermo-canvas');if(!canvas)return;
+  var dpr=window.devicePixelRatio||1;
+  var W=(canvas.parentElement&&canvas.parentElement.clientWidth>16)?canvas.parentElement.clientWidth-16:340;
+  var CLOUD_H=36,PRECIP_H=22,HC=420+CLOUD_H+PRECIP_H;
+  canvas.width=W*dpr;canvas.height=HC*dpr;
+  canvas.style.width=W+'px';canvas.style.height=HC+'px';
+  var ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  var PL=44,PR=10,PT=CLOUD_H+8,PB=PRECIP_H+30;
+  var CW=W-PL-PR,CH=HC-PT-PB,MAXALT=3500,N=hours.length;
+  if(!N)return;
+  var CellW=CW/N;
+  // Cloud panel
+  var cloudRowH=CLOUD_H/3;
+  var cloudArrs=[cloudHighArr,cloudMidArr,cloudLowArr];
+  var cloudLabels=['Vys.','Stř.','Níz.'];
+  for(var li=0;li<3;li++){
+    var rowY=li*cloudRowH;
+    for(var hi=0;hi<N;hi++){
+      var pct=cloudArrs[li][hi]||0;if(pct<5)continue;
+      ctx.fillStyle='rgba('+(li===0?'180,195,210':li===1?'120,140,160':'80,100,120')+','+(0.15+pct/100*0.65)+')';
+      ctx.fillRect(PL+hi*CellW,rowY,CellW,cloudRowH);
+    }
+    ctx.fillStyle='#475569';ctx.font='7px system-ui';ctx.textAlign='right';
+    ctx.fillText(cloudLabels[li],PL-3,rowY+cloudRowH*0.75);
+  }
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PL,CLOUD_H);ctx.lineTo(W-PR,CLOUD_H);ctx.stroke();
+  // Background + daytime
+  ctx.fillStyle='#f8fafc';ctx.fillRect(PL,PT,CW,CH);
+  ctx.fillStyle='rgba(255,251,235,0.5)';
+  for(var hi=0;hi<N;hi++){var h=hours[hi];if(h>=5&&h<=19)ctx.fillRect(PL+hi*CellW,PT,CellW,CH);}
+  // W* cells
+  for(var hi=0;hi<N;hi++){
+    var blh=blhArr[hi]||0,ws=wstarArr[hi]||0;
+    for(var z=0;z<MAXALT;z+=50){
+      var w=wstarAtHeight(ws,z+25,blh);if(w<0.05)continue;
+      ctx.fillStyle=wstarColorSmooth(w);
+      ctx.fillRect(PL+hi*CellW,PT+CH*(1-(z+50)/MAXALT),CellW+0.5,CH*50/MAXALT+0.5);
+    }
+  }
+  // Cloud overlay
+  for(var hi=0;hi<N;hi++){
+    var x=PL+hi*CellW;
+    var cl=cloudLowArr[hi]||0;
+    if(cl>5){ctx.fillStyle='rgba(148,163,184,'+(0.08+cl/100*0.3)+')';ctx.fillRect(x,PT+CH*(1-900/MAXALT),CellW,CH*900/MAXALT);}
+    var cm=cloudMidArr[hi]||0;
+    if(cm>5){ctx.fillStyle='rgba(100,116,139,'+(0.06+cm/100*0.2)+')';ctx.fillRect(x,PT+CH*(1-2800/MAXALT),CellW,CH*1300/MAXALT);}
+  }
+  // Precip bar
+  var precipY=PT+CH+2;
+  for(var hi=0;hi<N;hi++){
+    var prec=precipArr[hi]||0,wc=wCodeArr[hi]||0;if(prec<0.05&&wc<51)continue;
+    ctx.fillStyle=wc>=95?'rgba(124,58,237,0.85)':wc>=71?'rgba(186,230,253,0.9)':wc>=51?'rgba(147,197,253,0.9)':'rgba(59,130,246,0.85)';
+    var barH=Math.min(PRECIP_H-4,Math.max(3,prec/3*(PRECIP_H-4)));
+    ctx.fillRect(PL+hi*CellW+1,precipY+PRECIP_H-barH,CellW-2,barH);
+  }
+  ctx.fillStyle='#94a3b8';ctx.font='7px system-ui';ctx.textAlign='right';ctx.fillText('Srážky',PL-3,precipY+PRECIP_H*0.75);
+  // Grid
+  [0,500,1000,1500,2000,2500,3000,3500].forEach(function(alt){
+    var y=PT+CH*(1-alt/MAXALT);ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();
+    ctx.fillStyle='#475569';ctx.font='10px system-ui';ctx.textAlign='right';
+    ctx.fillText(alt===0?'GND':alt+'m',PL-5,y+3.5);
+  });
+  hours.forEach(function(h,i){
+    if(h%2===0){var x=PL+(i+0.5)*CellW;ctx.strokeStyle='rgba(0,0,0,0.07)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(x,PT);ctx.lineTo(x,PT+CH);ctx.stroke();}
+  });
+  // BLH
+  ctx.beginPath();ctx.strokeStyle='#1e293b';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';
+  for(var hi=0;hi<N;hi++){var x=PL+(hi+0.5)*CellW,y=PT+CH*(1-Math.min(blhArr[hi]||0,MAXALT)/MAXALT);hi===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();
+  // Cu base
+  ctx.beginPath();ctx.strokeStyle='#ec4899';ctx.lineWidth=2.5;ctx.setLineDash([6,4]);
+  var started=false;
+  for(var hi=0;hi<N;hi++){var cb=cuBaseArr[hi]||0;if(cb<50||cb>MAXALT){started=false;continue;}var x=PL+(hi+0.5)*CellW,y=PT+CH*(1-cb/MAXALT);if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);}
+  ctx.stroke();ctx.setLineDash([]);
+  // Wind arrows
+  for(var hi=0;hi<N;hi++){
+    var x=PL+(hi+0.5)*CellW,y=HC-PB+14;
+    var spd=windSpArr[hi]||0,dir=((windDirArr[hi]||0)+180)*Math.PI/180;
+    var len=Math.min(9,3+spd*1.3);
+    ctx.strokeStyle='#334155';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x-len*Math.sin(dir)/2,y+len*Math.cos(dir)/2);ctx.lineTo(x+len*Math.sin(dir)/2,y-len*Math.cos(dir)/2);ctx.stroke();
+    var hd=3.5,ha=0.5,tx=x+len*Math.sin(dir)/2,ty=y-len*Math.cos(dir)/2;
+    ctx.fillStyle='#334155';ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx-hd*Math.sin(dir-ha),ty+hd*Math.cos(dir-ha));ctx.lineTo(tx-hd*Math.sin(dir+ha),ty+hd*Math.cos(dir+ha));ctx.closePath();ctx.fill();
+  }
+  // X labels
+  ctx.textAlign='center';ctx.fillStyle='#475569';ctx.font='bold 10px system-ui';
+  hours.forEach(function(h,i){
+    if(h%2===0) ctx.fillText(String(h).padStart(2,'0'),PL+(i+0.5)*CellW,HC-PB+26);
+  });
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.strokeRect(PL,PT,CW,CH);
+  // Legend
+  var leg=el('thermo-legend');if(!leg)return;leg.innerHTML='';
+  [[0,'#e0f2fe','0'],[0.5,'#93c5fd','0.5'],[1.0,'#60a5fa','1.0'],[1.5,'#34d399','1.5'],[2.0,'#fde68a','2.0'],[2.5,'#fb923c','2.5'],[3.2,'#ef4444','3.2+']].forEach(function(it){
+    leg.innerHTML+='<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#64748b"><div style="width:13px;height:13px;border-radius:3px;background:'+it[1]+'"></div>'+it[2]+' m/s</div>';
+  });
+  leg.innerHTML+='<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#64748b"><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#1e293b" stroke-width="3"/></svg>BLH</div>'
+    +'<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#64748b"><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#ec4899" stroke-width="2.5" stroke-dasharray="5,4"/></svg>Cu</div>'
+    +'<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#64748b"><div style="width:13px;height:8px;border-radius:2px;background:rgba(100,116,139,0.5)"></div>Oblačnost</div>'
+    +'<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#64748b"><div style="width:13px;height:8px;border-radius:2px;background:rgba(59,130,246,0.8)"></div>Srážky</div>';
+}
+
+// ── WIND ROSE (single hour, multi-level) ────────────────────────────────────
+function drawWindRose(hl, hIdx) {
+  var canvas=el('wind-canvas');if(!canvas)return;
+  var dpr=window.devicePixelRatio||1;
+  var pw=(canvas.parentElement&&canvas.parentElement.clientWidth>20)?canvas.parentElement.clientWidth-16:300;
+  var size=Math.min(pw,300);
+  canvas.width=size*dpr;canvas.height=size*dpr;
+  canvas.style.width=size+'px';canvas.style.height=size+'px';
+  var ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  var cx=size/2,cy=size/2,R=size/2-28;
+
+  var WLEVELS=[
+    {label:'10m',  spKey:'wind_speed_10m',    dirKey:'wind_direction_10m',    h:10,   color:'#1d4ed8'},
+    {label:'100m', spKey:'wind_speed_100m',   dirKey:'wind_direction_100m',   h:100,  color:'#0891b2'},
+    {label:'925',  spKey:'wind_speed_925hPa', dirKey:'wind_direction_925hPa', h:770,  color:'#059669'},
+    {label:'850',  spKey:'wind_speed_850hPa', dirKey:'wind_direction_850hPa', h:1450, color:'#ca8a04'},
+    {label:'700',  spKey:'wind_speed_700hPa', dirKey:'wind_direction_700hPa', h:3000, color:'#dc2626'},
+    {label:'500',  spKey:'wind_speed_500hPa', dirKey:'wind_direction_500hPa', h:5550, color:'#7c3aed'},
+  ];
+
+  // Max speed for scaling
+  var maxSpd=2;
+  WLEVELS.forEach(function(lv){
+    var v=(hl[lv.spKey]&&hl[lv.spKey][hIdx]!=null)?hl[lv.spKey][hIdx]/3.6:0;
+    if(v>maxSpd)maxSpd=v;
+  });
+  maxSpd=Math.ceil(maxSpd/2)*2;
+
+  // Background
+  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,size,size);
+
+  // Rings
+  [0.25,0.5,0.75,1.0].forEach(function(f){
+    ctx.strokeStyle='#e2e8f0';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,2*Math.PI);ctx.stroke();
+    ctx.fillStyle='#94a3b8';ctx.font='8px system-ui';ctx.textAlign='left';
+    ctx.fillText((Math.round(maxSpd*f*10)/10)+'m/s',cx+R*f*0.7+2,cy-R*f*0.7-2);
+  });
+
+  // Cardinals - Sever nahoře
+  var cardinals=[['S',-90],['J',90],['V',0],['Z',180]];
+  cardinals.forEach(function(d){
+    var rad=d[1]*Math.PI/180;
+    ctx.fillStyle=d[0]==='S'?'#dc2626':'#475569';
+    ctx.font='bold 11px system-ui';ctx.textAlign='center';
+    ctx.fillText(d[0],cx+(R+14)*Math.cos(rad),cy+(R+14)*Math.sin(rad)+4);
+  });
+
+  // Draw one arrow per level
+  WLEVELS.forEach(function(lv,li){
+    var sp=(hl[lv.spKey]&&hl[lv.spKey][hIdx]!=null)?hl[lv.spKey][hIdx]/3.6:null;
+    var dir=(hl[lv.dirKey]&&hl[lv.dirKey][hIdx]!=null)?hl[lv.dirKey][hIdx]:null;
+    if(sp==null||dir==null||sp<0.1)return;
+    var len=(sp/maxSpd)*R;
+    var rad=(dir+90)*Math.PI/180; // arrow points TO where wind blows
+    var tx=cx+len*Math.cos(rad),ty=cy+len*Math.sin(rad);
+    ctx.strokeStyle=lv.color;ctx.lineWidth=2.5;ctx.globalAlpha=0.9;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(tx,ty);ctx.stroke();
+    var hd=6,ha=0.45;ctx.fillStyle=lv.color;ctx.globalAlpha=1;
+    ctx.beginPath();ctx.moveTo(tx,ty);
+    ctx.lineTo(tx-hd*Math.cos(rad-ha),ty-hd*Math.sin(rad-ha));
+    ctx.lineTo(tx-hd*Math.cos(rad+ha),ty-hd*Math.sin(rad+ha));
+    ctx.closePath();ctx.fill();
+    // Label at tip
+    ctx.fillStyle=lv.color;ctx.font='bold 9px system-ui';ctx.textAlign='center';
+    ctx.fillText(lv.label,cx+(len+13)*Math.cos(rad),cy+(len+13)*Math.sin(rad)+4);
+  });
+  ctx.globalAlpha=1;
+  ctx.beginPath();ctx.arc(cx,cy,3,0,2*Math.PI);ctx.fillStyle='#1a2540';ctx.fill();
+
+  // Legend
+  var leg=el('wind-legend');if(!leg)return;leg.innerHTML='';
+  WLEVELS.forEach(function(lv){
+    var sp=(hl[lv.spKey]&&hl[lv.spKey][hIdx]!=null)?Math.round(hl[lv.spKey][hIdx]/3.6*10)/10:null;
+    if(sp==null)return;
+    leg.innerHTML+='<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#64748b">'
+      +'<div style="width:14px;height:3px;border-radius:2px;background:'+lv.color+'"></div>'
+      +lv.label+': '+sp+' m/s</div>';
+  });
+}
+
+// ── SKEW-T (pressure-level accurate) ─────────────────────────────────────────
+// Pressure levels with approx heights (m) for CZ/Central Europe
+var PLEVELS = [
+  {p:1000,h:100},  {p:975,h:320},  {p:950,h:540},  {p:925,h:770},
+  {p:900,h:1000},  {p:850,h:1450}, {p:800,h:1950},  {p:700,h:3000}
+];
+
+function getSkewtProfile(hl, hIdx) {
+  // Extract T and Td at each pressure level for hour hIdx
+  var T=[], Td=[];
+  PLEVELS.forEach(function(lv){
+    var tKey='temperature_'+lv.p+'hPa', dKey='dew_point_'+lv.p+'hPa';
+    var t = (hl[tKey] && hl[tKey][hIdx]!=null) ? hl[tKey][hIdx] : null;
+    var d = (hl[dKey] && hl[dKey][hIdx]!=null) ? hl[dKey][hIdx] : null;
+    // Fallback: compute from RH if dew_point not available
+    if(t!=null && d==null) {
+      var rhKey='relative_humidity_'+lv.p+'hPa';
+      var rh=(hl[rhKey]&&hl[rhKey][hIdx]!=null)?hl[rhKey][hIdx]:70;
+      d=t - (100-rh)/5;
+    }
+    T.push(t); Td.push(d);
+  });
+  return {T:T, Td:Td};
+}
+
+function getWindProfile(hl, hIdx) {
+  var levels=[
+    {label:'10m',  spKey:'wind_speed_10m',    dirKey:'wind_direction_10m',    h:10},
+    {label:'100m', spKey:'wind_speed_100m',   dirKey:'wind_direction_100m',   h:100},
+    {label:'925',  spKey:'wind_speed_925hPa', dirKey:'wind_direction_925hPa', h:770},
+    {label:'900',  spKey:'wind_speed_900hPa', dirKey:'wind_direction_900hPa', h:1000},
+    {label:'850',  spKey:'wind_speed_850hPa', dirKey:'wind_direction_850hPa', h:1450},
+    {label:'800',  spKey:'wind_speed_800hPa', dirKey:'wind_direction_800hPa', h:1950},
+    {label:'700',  spKey:'wind_speed_700hPa', dirKey:'wind_direction_700hPa', h:3000},
+    {label:'600',  spKey:'wind_speed_600hPa', dirKey:'wind_direction_600hPa', h:4200},
+    {label:'500',  spKey:'wind_speed_500hPa', dirKey:'wind_direction_500hPa', h:5550},
+  ];
+  return levels.map(function(lv){
+    var sp=(hl[lv.spKey]&&hl[lv.spKey][hIdx]!=null)?hl[lv.spKey][hIdx]/3.6:null;
+    var dir=(hl[lv.dirKey]&&hl[lv.dirKey][hIdx]!=null)?hl[lv.dirKey][hIdx]:null;
+    return {label:lv.label, sp:sp, dir:dir, h:lv.h};
+  }).filter(function(x){return x.sp!=null;});
+}
+
+function drawSkewT(hl, hIdx, blh) {
+  var canvas=el('skewtlogp-canvas');if(!canvas)return;
+  var prof=getSkewtProfile(hl,hIdx);
+  var T=prof.T, Td=prof.Td;
+  // surface from 2m measurements
+  var t_surf=hl.temperature_2m?(hl.temperature_2m[hIdx]||15):15;
+  var td_surf=hl.dew_point_2m?(hl.dew_point_2m[hIdx]||5):5;
+
+  var dpr=window.devicePixelRatio||1;
+  var W=(canvas.parentElement&&canvas.parentElement.clientWidth>0)?canvas.parentElement.clientWidth-16:340;
+  var Hc=300;
+  canvas.width=W*dpr;canvas.height=Hc*dpr;canvas.style.width=W+'px';canvas.style.height=Hc+'px';
+  var ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+
+  var padL=40,padR=50,padT=8,padB=22;
+  var cW=W-padL-padR,cH=Hc-padT-padB;
+  var maxH=3000,minT=-30,maxT=40;
+  var SKEW=6; // degrees skew per km
+
+  function xT(temp,alt){
+    var skewShift=SKEW*(alt/1000);
+    return padL+cW*(temp-minT+skewShift)/(maxT-minT+SKEW*(maxH/1000));
+  }
+  function yH(alt){return padT+cH*(1-alt/maxH);}
+
+  // Background
+  ctx.fillStyle='#fafafa';ctx.fillRect(0,0,W,Hc);
+  ctx.fillStyle='#f0f9ff';ctx.fillRect(padL,padT,cW,cH);
+
+  // Dry adiabats (theta lines) - grey dashed
+  ctx.strokeStyle='rgba(150,150,150,0.25)';ctx.lineWidth=0.8;ctx.setLineDash([3,3]);
+  for(var theta=-20;theta<=60;theta+=10){
+    ctx.beginPath();var started2=false;
+    for(var z=0;z<=maxH;z+=100){
+      var DALR=9.8/1000;
+      var t=theta-DALR*z;
+      var x=xT(t,z),y=yH(z);
+      if(!started2){ctx.moveTo(x,y);started2=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Moist adiabats - blue-grey dashed
+  ctx.strokeStyle='rgba(100,130,180,0.2)';ctx.lineWidth=0.7;ctx.setLineDash([2,4]);
+  for(var tw=0;tw<=30;tw+=5){
+    ctx.beginPath();var startedM=false;
+    for(var z=0;z<=maxH;z+=100){
+      // Approximate moist adiabatic lapse rate
+      var malr=(9.8*(1+2501*0.01/(461.5*(tw+273.15))))/(1+(2501*2501*0.01)/(1005*461.5*(tw+273.15)*(tw+273.15)));
+      var t=tw-malr/1000*z;
+      var x=xT(t,z),y=yH(z);
+      if(!startedM){ctx.moveTo(x,y);startedM=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Isotherm lines - light grey
+  ctx.lineWidth=0.4;
+  for(var t=-50;t<=40;t+=10){
+    ctx.strokeStyle=t===0?'rgba(0,0,200,0.2)':'rgba(150,150,150,0.2)';
+    ctx.beginPath();ctx.moveTo(xT(t,0),yH(0));ctx.lineTo(xT(t,maxH),yH(maxH));ctx.stroke();
+    ctx.fillStyle='#94a3b8';ctx.font='8px system-ui';ctx.textAlign='center';
+    ctx.fillText(t+'°',xT(t,0),yH(0)+14);
+  }
+
+  // Height grid lines
+  [0,500,1000,1500,2000,2500,3000,4000,5000,6000].forEach(function(alt){
+    var y=yH(alt);ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.font='8px system-ui';ctx.textAlign='right';
+    ctx.fillText(alt===0?'GND':alt+'m',padL-3,y+3);
+  });
+
+  // BLH line
+  if(blh>0&&blh<=maxH){
+    ctx.strokeStyle='rgba(30,41,59,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+    ctx.beginPath();ctx.moveTo(padL,yH(blh));ctx.lineTo(W-padR,yH(blh));ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#1e293b';ctx.font='8px system-ui';ctx.textAlign='left';
+    ctx.fillText('BLH',padL+2,yH(blh)-3);
+  }
+
+  // TEMPERATURE curve - red, thick
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(xT(t_surf,0),yH(0));
+  for(var i=0;i<PLEVELS.length;i++){
+    if(T[i]==null)continue;
+    ctx.lineTo(xT(T[i],PLEVELS[i].h),yH(PLEVELS[i].h));
+  }
+  ctx.stroke();
+
+  // DEW POINT curve - blue, thick
+  ctx.strokeStyle='#2563eb';ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(xT(td_surf,0),yH(0));
+  for(var i=0;i<PLEVELS.length;i++){
+    if(Td[i]==null)continue;
+    ctx.lineTo(xT(Td[i],PLEVELS[i].h),yH(PLEVELS[i].h));
+  }
+  ctx.stroke();
+
+  // LCL - where T and Td curves meet (approx via formula)
+  var lcl_h=Math.round(Math.max(0,t_surf-td_surf)*120);
+  if(lcl_h>0&&lcl_h<maxH){
+    var lcl_t=t_surf-9.8/1000*lcl_h;
+    ctx.beginPath();ctx.arc(xT(lcl_t,lcl_h),yH(lcl_h),5,0,2*Math.PI);
+    ctx.fillStyle='#ec4899';ctx.fill();
+    ctx.fillStyle='#ec4899';ctx.font='bold 8px system-ui';ctx.textAlign='left';
+    ctx.fillText('LCL '+lcl_h+'m',xT(lcl_t,lcl_h)+7,yH(lcl_h)+3);
+  }
+
+  // WIND BARBS on right side
+  var wProf=getWindProfile(hl,hIdx);
+  var barbX=W-padR+8;
+  wProf.forEach(function(wl){
+    if(wl.h>maxH)return;
+    var y=yH(wl.h);var spd=wl.sp,dir=wl.dir;
+    if(spd==null||dir==null)return;
+    var kt=Math.round(spd*1.944); // m/s to knots for standard barbs
+    var rad=(dir-90)*Math.PI/180;
+    var blen=16;
+    // Stem
+    ctx.strokeStyle='#334155';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(barbX,y);ctx.lineTo(barbX+blen*Math.cos(rad),y+blen*Math.sin(rad));ctx.stroke();
+    // Flags (50kt each), full barbs (10kt), half barbs (5kt)
+    var remaining=kt;var bx=barbX+blen*Math.cos(rad),by=y+blen*Math.sin(rad);
+    var perpR=rad+Math.PI/2,barbStep=0.3;
+    var pos=0;
+    while(remaining>=50){
+      var sx=barbX+(blen-pos*blen*0.15)*Math.cos(rad),sy=y+(blen-pos*blen*0.15)*Math.sin(rad);
+      var ex=sx+8*Math.cos(perpR),ey=sy+8*Math.sin(perpR);
+      var nx=sx+blen*0.15*Math.cos(rad),ny=sy+blen*0.15*Math.sin(rad);
+      ctx.fillStyle='#334155';ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.lineTo(nx,ny);ctx.closePath();ctx.fill();
+      remaining-=50;pos+=0.5;
+    }
+    while(remaining>=10){
+      var sx=barbX+(blen-pos*blen*0.15)*Math.cos(rad),sy=y+(blen-pos*blen*0.15)*Math.sin(rad);
+      ctx.strokeStyle='#334155';ctx.lineWidth=1.2;
+      ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+7*Math.cos(perpR),sy+7*Math.sin(perpR));ctx.stroke();
+      remaining-=10;pos+=0.3;
+    }
+    if(remaining>=5){
+      var sx=barbX+(blen-pos*blen*0.15)*Math.cos(rad),sy=y+(blen-pos*blen*0.15)*Math.sin(rad);
+      ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+4*Math.cos(perpR),sy+4*Math.sin(perpR));ctx.stroke();
+    }
+    // Height label
+    ctx.fillStyle='#94a3b8';ctx.font='7px system-ui';ctx.textAlign='left';
+    ctx.fillText(wl.label,barbX+blen+2,y+3);
+  });
+
+  // Border
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.strokeRect(padL,padT,cW,cH);
+
+  // Legend
+  var leg=el('skewtlogp-legend');if(!leg)return;
+  leg.innerHTML='T='+t_surf.toFixed(1)+'°C &nbsp; Td='+td_surf.toFixed(1)+'°C &nbsp; Spread='+(t_surf-td_surf).toFixed(1)+'°C &nbsp; LCL≈'+lcl_h+'m';
+}
+
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+function renderAll(d) {
+  var K=120;
+  var sp12=Math.max(0,d.t12-d.td12);
+  var spMax=Math.max(sp12,d.maxSpread);
+  var tb12=Math.round(sp12*K);
+  var tbMax=Math.round(spMax*K);
+  var g_rho=9.81/1200,ToK=d.t12+273.15;
+  var zi=(d.blh>200&&d.blh<4000)?d.blh:tb12*0.7;
+  var H=0.27*(d.sw||0),wstar=0;
+  if(d.sw>50&&zi>200) wstar=Math.pow(g_rho*H*zi/ToK,1/3);
+  else if(d.cape>0) wstar=0.4*Math.pow(d.cape,1/3);
+  else wstar=0.8;
+  wstar=Math.max(0,Math.min(6,Math.round(wstar*10)/10));
+  var ts=Math.min(spMax/4,1.5)+(d.tmax>=28?1.5:d.tmax>=22?1.0:d.tmax>=16?0.5:0)+Math.min(d.cape/500,1.5);
+  ts=Math.min(5,Math.max(0,ts));
+  var cuLabel,cuColor;
+  if(d.tmax<12||ts<0.5){cuLabel='Ne';cuColor='#ff3d5a';}
+  else if(sp12<8&&ts>=1.5){cuLabel='Ano';cuColor='#00e676';}
+  else if(sp12<12&&ts>=1.0){cuLabel='Možná';cuColor='#ffd740';}
+  else if(sp12>=12){cuLabel='Bezoblačná termika';cuColor='#5badff';}
+  else{cuLabel='Málo';cuColor='#ff9100';}
+
+  // Thermal width
+  var dTyp=Math.round(0.30*zi);
+  var dMin=Math.round(0.20*zi);
+  var dMax=Math.round(0.45*zi);
+  var dSpread=dMax-dMin;
+  var varLabel=dSpread<150?'Malá (stabilní)':dSpread<300?'Střední':'Velká (nestabilní)';
+
+  el('thermal-rows').innerHTML=
+    row('Průměrné stoupání W*',wstar,'m/s','SW='+Math.round(d.sw)+' W/m², zi='+Math.round(zi)+'m')
+   +row('Síla termiky ts',ts.toFixed(1),'/ 5.0','')
+   +row('Cu oblaky','<span class="badge" style="background:'+cuColor+'22;color:'+cuColor+'">'+cuLabel+'</span>','','')
+   +row('CAPE',Math.round(d.cape),'J/kg','');
+
+  el('thermal-width-rows').innerHTML=
+    '<div style="height:1px;background:#f1f5f9;margin:6px 0"></div>'
+   +row('Průměr stoupavého proudu',dTyp,'m','≈ 0.30 × BLH ('+Math.round(zi)+'m)')
+   +row('Variabilita šířky',dMin+'–'+dMax+' m','','rozptyl '+dSpread+'m · '+varLabel)
+   +row('Vhodnost pro létání',
+      dTyp>=150
+        ? '<span style="color:#16a34a;font-weight:700">&#10003; Dostatečné (&gt;150 m)</span>'
+        : '<span style="color:#ff9100;font-weight:700">&#9888; Úzké (&lt;150 m)</span>',
+      '','doporučeno ≥150m pro kroužení');
+
+  var wdirs=['S','SSV','SV','VSV','V','VJV','JV','JJV','J','JJZ','JZ','ZJZ','Z','ZSZ','SZ','SSZ'];
+  var wdirStr=wdirs[Math.round((d.wdir||0)/22.5)%16];
+  el('meteo-rows').innerHTML=
+    row('Teplota 2m',d.t12.toFixed(1),'°C','ve 12:00')
+   +row('Rosný bod',d.td12.toFixed(1),'°C','ve 12:00')
+   +row('Relativní vlhkost',Math.round(d.rh),'%','ve 12:00')
+   +row('Spread T−Td',sp12.toFixed(1),'°C','ve 12:00')
+   +row('Globální záření',Math.round(d.sw),'W/m²','ve 12:00')
+   +row('Dohlednost',Math.round(d.vis/1000*10)/10,'km','ve 12:00')
+   +row('Vítr (max dne)',d.wind,'m/s '+wdirStr,'denní maximum')
+   +row('Oblačnost',Math.round(d.cloud),'%','denní průměr')
+   +row('Srážky',Math.round(d.rain),'%','max pravděp. dne');
+}
+
+// ── RENDER CHARTS ─────────────────────────────────────────────────────────────
+function renderCharts(data, dayI, h0) {
+  var hl=data.hourly;
+  var hours=[],blhArr=[],cuBaseArr=[],wstarArr=[],windSpArr=[],windDirArr=[];
+  var cloudLowArr=[],cloudMidArr=[],cloudHighArr=[],precipArr=[],wCodeArr=[];
+  for(var hh=h0+6;hh<=h0+20&&hh<hl.temperature_2m.length;hh++){
+    var t=hl.temperature_2m[hh]||0,td=hl.dew_point_2m[hh]||0;
+    var blh=hl.boundary_layer_height[hh]||0,sw=hl.shortwave_radiation[hh]||0;
+    var cape=hl.cape?(hl.cape[hh]||0):0;
+    var zi=(blh>200&&blh<4000)?blh:Math.max(0,t-td)*120*0.7;
+    var H=0.27*sw,ToK=t+273.15,ws=0;
+    if(sw>50&&zi>200)ws=Math.pow(9.81/1200*H*zi/ToK,1/3);
+    else if(cape>0)ws=0.4*Math.pow(cape,1/3);
+    hours.push(hh-h0);
+    blhArr.push(Math.round(blh));
+    cuBaseArr.push(Math.round(Math.max(0,t-td)*120));
+    wstarArr.push(Math.max(0,ws));
+    windSpArr.push((hl.wind_speed_10m?(hl.wind_speed_10m[hh]||0)/3.6:0));
+    windDirArr.push(hl.wind_direction_10m?(hl.wind_direction_10m[hh]||0):0);
+    cloudLowArr.push(hl.cloud_cover_low?(hl.cloud_cover_low[hh]||0):0);
+    cloudMidArr.push(hl.cloud_cover_mid?(hl.cloud_cover_mid[hh]||0):0);
+    cloudHighArr.push(hl.cloud_cover_high?(hl.cloud_cover_high[hh]||0):0);
+    precipArr.push(hl.precipitation?(hl.precipitation[hh]||0):0);
+    wCodeArr.push(hl.weather_code?(hl.weather_code[hh]||0):0);
+  }
+  drawThermoCanvas(hours,blhArr,cuBaseArr,wstarArr,windSpArr,windDirArr,cloudLowArr,cloudMidArr,cloudHighArr,precipArr,wCodeArr);
+  // Draw wind rose and skew-T for current hour
+  var h12=h0+12;
+  if(el('skewt-slider')) el('skewt-slider').value=12;
+  if(el('wind-time-slider')) el('wind-time-slider').value=12;
+  el('skewt-time-label')&&(el('skewt-time-label').textContent='12:00');
+  el('wind-time-label')&&(el('wind-time-label').textContent='12:00');
+  var blh12=hl.boundary_layer_height?(hl.boundary_layer_height[h12]||0):0;
+  try{drawSkewT(hl,h12,blh12);}catch(e){console.warn('skewt',e);}
+  try{drawWindRose(hl,h12);}catch(e){console.warn('wind',e);}
+}
+
+function renderDemoCharts() {
+  var hours=[],blhArr=[],cuBaseArr=[],wstarArr=[],wsArr=[],wdArr=[];
+  var dcLow=[],dcMid=[],dcHigh=[],dPrecip=[],dWcode=[];
+  for(var h=6;h<=20;h++){
+    var bell=Math.max(0,Math.sin((h-6)/14*Math.PI));
+    hours.push(h);blhArr.push(Math.round(200+bell*1600));cuBaseArr.push(Math.round(800+bell*600));
+    wstarArr.push(Math.round(bell*2.2*100)/100);wsArr.push(3.5);wdArr.push(210+(h-13)*2);
+    dcLow.push(Math.max(0,20-h*1.5));dcMid.push(h>12&&h<18?40:10);dcHigh.push(20);
+    dPrecip.push(h>=14&&h<=16?0.4:0);dWcode.push(h>=14&&h<=16?61:0);
+  }
+  drawThermoCanvas(hours,blhArr,cuBaseArr,wstarArr,wsArr,wdArr,dcLow,dcMid,dcHigh,dPrecip,dWcode);
+  // Demo Skew-T and wind rose use fake allDaysData hourly
+  if(allDaysData){
+    var h12=12;
+    try{drawSkewT(allDaysData.hourly,h12,800);}catch(e){console.warn(e);}
+    try{drawWindRose(allDaysData.hourly,h12);}catch(e){console.warn(e);}
+  }
+}
+
+// ── SLIDER HANDLERS ──────────────────────────────────────────────────────────
+var currentSkewtHour=12, currentWindHour=12;
+
+function onSkewtTimeChange(val) {
+  currentSkewtHour=parseInt(val);
+  el('skewt-time-label').textContent=String(currentSkewtHour).padStart(2,'0')+':00';
+  if(allDaysData) {
+    var h0=dayIdx*24;
+    var hIdx=h0+currentSkewtHour;
+    var blh=allDaysData.hourly.boundary_layer_height?(allDaysData.hourly.boundary_layer_height[hIdx]||0):0;
+    try{drawSkewT(allDaysData.hourly,hIdx,blh);}catch(e){console.warn(e);}
+  }
+}
+
+function onWindTimeChange(val) {
+  currentWindHour=parseInt(val);
+  el('wind-time-label').textContent=String(currentWindHour).padStart(2,'0')+':00';
+  if(allDaysData) {
+    var h0=dayIdx*24;
+    var hIdx=h0+currentWindHour;
+    try{drawWindRose(allDaysData.hourly,hIdx);}catch(e){console.warn(e);}
+  }
+}
+
+// ── DEMO DATA ─────────────────────────────────────────────────────────────────
+function makeDemoData(){
+  return{t12:21.0,td12:7.0,rh:46,blh:1500,cape:650,sw:680,vis:18000,wind:3.3,wdir:210,cloud:32,rain:0,tmax:26,maxSpread:19.0};
+}
+
+// ── LOAD ──────────────────────────────────────────────────────────────────────
+function wico(code){if(code===0)return'&#9728;';if(code<=2)return'&#127780;';if(code===3)return'&#9729;';if(code<=49)return'&#127787;';if(code<=67)return'&#127783;';if(code<=77)return'&#10052;';if(code<=82)return'&#127782;';return'&#9928;';}
+function verd(s){if(s>=78)return{c:'#00e676',bg:'rgba(0,230,118,.12)'};if(s>=60)return{c:'#ffd740',bg:'rgba(255,215,64,.10)'};if(s>=40)return{c:'#ff9100',bg:'rgba(255,145,0,.10)'};return{c:'#ff3d5a',bg:'rgba(255,61,90,.10)'};}
+function scoreDay(d){
+  var rain=d.rain,cloud=d.cloud,vis=d.vis,wind=d.wind,ts=d.ts,cuProb=d.cuProb;
+  if(rain>=40&&cloud>=70&&vis<5)return 0;if(rain>=60)return 0;if(vis<2)return 0;if(cloud>=90&&vis<3)return 0;
+  var s=0;s+=Math.min(ts/4.0,1.0)*40;
+  if(cuProb===3)s+=30;else if(cuProb===2)s+=20;else if(cuProb===1)s+=10;
+  if(wind>10)return 0;var wf=wind<=5?1.0:1.0-(wind-5)/5;s+=Math.round(wf*20);
+  s+=Math.max(0,5-rain*0.06);s+=Math.min(vis/5,5);
+  return Math.max(0,Math.min(100,Math.round(s)));
+}
+function buildDayPicker(data) {
+  var dl=data.daily, hl=data.hourly;
+  var strip=el('day-strip');if(!strip)return;
+  var dayNames=['Ne','Po','Út','St','Čt','Pá','So'];
+  var fullNames=['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+  strip.innerHTML='';
+  for(var i=0;i<Math.min(5,dl.time.length);i++){
+    var date=new Date(dl.time[i]+'T12:00:00');
+    var lbl=i===0?'Dnes':i===1?'Zítra':dayNames[date.getDay()];
+    var h0=i*24, h12=h0+12;
+    if(hl.time){for(var hi=h0;hi<h0+24&&hi<hl.time.length;hi++){if(hl.time[hi]&&hl.time[hi].indexOf(dl.time[i]+'T12:00')===0){h12=hi;break;}}}
+    var maxSpread=0;
+    for(var hh=h0+6;hh<h0+21&&hh<hl.temperature_2m.length;hh++){var sp=hl.temperature_2m[hh]-hl.dew_point_2m[hh];if(sp>maxSpread)maxSpread=sp;}
+    var t12=hl.temperature_2m[h12]||15,td12=hl.dew_point_2m[h12]||5;
+    var blh=hl.boundary_layer_height?(hl.boundary_layer_height[h12]||0):0;
+    var cape=hl.cape?(hl.cape[h12]||0):0;
+    var sw=hl.shortwave_radiation?(hl.shortwave_radiation[h12]||0):0;
+    var sp12=Math.max(0,t12-td12),spMax=Math.max(sp12,maxSpread);
+    var tsSpread=Math.min(spMax/4,1.5),tmax=dl.temperature_2m_max[i]||15;
+    var tsTemp=tmax>=28?1.5:tmax>=22?1.0:tmax>=16?0.5:0;
+    var tsB=(blh>500&&blh<4000)?Math.min(blh/1000,1.5):0;
+    var tsCape=Math.min(cape/500,1.5);
+    var ts=Math.min(5,tsSpread+tsTemp+Math.max(tsCape,tsB));
+    var cuProb=tmax<12||ts<0.5?0:sp12<8&&ts>=1.5?3:sp12<12&&ts>=1.0?2:1;
+    var wind=Math.round((dl.wind_speed_10m_max[i]||0)/3.6*10)/10;
+    var vis=15,rain=Math.round(dl.precipitation_probability_max[i]||0);
+    var cloud=Math.round(dl.cloud_cover_mean[i]||50);
+    var s=scoreDay({rain:rain,cloud:cloud,vis:vis,wind:wind,ts:ts,cuProb:cuProb});
+    var v=verd(s);
+    var btn=document.createElement('button');
+    btn.className='day-chip'+(i===dayIdx?' on':'');
+    var dateShort=dl.time[i].slice(5); // MM-DD
+    btn.innerHTML='<span class="dc-name">'+lbl+'</span>'
+      +'<span class="dc-date">'+dateShort+'</span>';
+    (function(idx){btn.onclick=function(){dayIdx=idx;onDayChange(idx);};})(i);
+    strip.appendChild(btn);
+  }
+}
+
+function onDayChange(val) {
+  dayIdx = parseInt(val);
+  // Update chip active state
+  document.querySelectorAll('.day-chip').forEach(function(b,i){
+    b.classList.toggle('on', i===dayIdx);
+  });
+  if(!allDaysData) return;
+  var dl = allDaysData.daily;
+  var days=['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+  var date = new Date(dl.time[dayIdx]+'T12:00:00');
+  var dayName = dayIdx===0?'Dnes':dayIdx===1?'Zítra':days[date.getDay()];
+  el('day-picker-label').textContent = dayName+' ('+dl.time[dayIdx]+')';
+  el('htitle').textContent = dayName+' — '+dl.time[dayIdx];
+  // Recompute cachedData for new day
+  var hl = allDaysData.hourly;
+  var h0 = dayIdx*24, target12=dl.time[dayIdx]+'T12:00', h12=h0+12;
+  if(hl.time){for(var hi=h0;hi<h0+24&&hi<hl.time.length;hi++){if(hl.time[hi]&&hl.time[hi].indexOf(target12)===0){h12=hi;break;}}}
+  var maxSpread=0;
+  for(var hh=h0+6;hh<h0+21&&hh<hl.temperature_2m.length;hh++){var sp=hl.temperature_2m[hh]-hl.dew_point_2m[hh];if(sp>maxSpread)maxSpread=sp;}
+  cachedData={
+    t12:hl.temperature_2m[h12],td12:hl.dew_point_2m[h12],rh:hl.relative_humidity_2m[h12]||60,
+    blh:hl.boundary_layer_height[h12]||0,cape:hl.cape?(hl.cape[h12]||0):0,
+    sw:hl.shortwave_radiation?(hl.shortwave_radiation[h12]||0):0,vis:hl.visibility?(hl.visibility[h12]||15000):15000,
+    wind:Math.round((dl.wind_speed_10m_max[dayIdx]||0)/3.6*10)/10,wdir:Math.round(dl.wind_direction_10m_dominant[dayIdx]||0),
+    cloud:Math.round(dl.cloud_cover_mean[dayIdx]||50),rain:Math.round(dl.precipitation_probability_max[dayIdx]||0),
+    tmax:dl.temperature_2m_max[dayIdx]||15,maxSpread:maxSpread
+  };
+  renderAll(cachedData);
+  renderCharts(allDaysData, dayIdx, h0);
+}
+
+function loadDetail() {
+  // Detect Claude artifact sandbox (no real URL, fetch blocked)
+  // Try to detect by checking if we're in an iframe with blob/null origin
+  var isSandbox = (window.location.href.indexOf('http')===-1) ||
+                  (window.location.href.indexOf('claude.ai')===-1 &&
+                   window.location.href.indexOf('github.io')===-1 &&
+                   window.location.href.indexOf('localhost')===-1 &&
+                   window.location.href.indexOf('netlify')===-1);
+  if(isSandbox) {
+    // Skip fetch, go straight to demo
+    setTimeout(function(){
+      var today=new Date();
+      var today=new Date();
+            var fakeDl={time:[],weather_code:[],temperature_2m_max:[],wind_speed_10m_max:[],wind_direction_10m_dominant:[],precipitation_probability_max:[],cloud_cover_mean:[]};
+            var fakeHl={time:[],temperature_2m:[],dew_point_2m:[],boundary_layer_height:[],relative_humidity_2m:[],cape:[],shortwave_radiation:[],visibility:[],precipitation_probability:[],wind_speed_10m:[],wind_direction_10m:[]};
+            for(var d=0;d<5;d++){
+              var dt=new Date(today);dt.setDate(today.getDate()+d);
+              fakeDl.time.push(dt.toISOString().slice(0,10));
+              fakeDl.weather_code.push([0,1,3,61,2][d]);
+              fakeDl.temperature_2m_max.push([26,29,21,17,23][d]);
+              fakeDl.wind_speed_10m_max.push([12,8,23,31,10][d]);
+              fakeDl.wind_direction_10m_dominant.push(210);
+              fakeDl.precipitation_probability_max.push([0,0,25,80,5][d]);
+              fakeDl.cloud_cover_mean.push([30,18,65,90,28][d]);
+              for(var h=0;h<24;h++){
+                var hi=d*24+h;
+                fakeHl.time.push(dt.toISOString().slice(0,10)+'T'+String(h).padStart(2,'0')+':00');
+                fakeHl.temperature_2m.push(15+Math.sin((h-6)/24*Math.PI)*8);
+                fakeHl.dew_point_2m.push(6+Math.sin((h-6)/24*Math.PI)*1.5);
+                fakeHl.boundary_layer_height.push(Math.max(0,Math.sin((h-6)/14*Math.PI)*1600));
+                fakeHl.relative_humidity_2m.push(45);
+                fakeHl.cape.push(Math.max(0,Math.sin((h-8)/14*Math.PI)*700));
+                fakeHl.shortwave_radiation.push(Math.max(0,Math.sin((h-6)/14*Math.PI)*750));
+                fakeHl.visibility.push(18000);
+                fakeHl.precipitation_probability.push(0);
+                fakeHl.wind_speed_10m.push(12);
+                fakeHl.wind_direction_10m.push(210);
+                if(!fakeHl['temperature_1000hPa'])fakeHl['temperature_1000hPa']=[];
+                fakeHl['temperature_1000hPa'].push(21 - (h<12?7:9)/1000*100);
+                if(!fakeHl['dew_point_1000hPa'])fakeHl['dew_point_1000hPa']=[];
+                fakeHl['dew_point_1000hPa'].push(7 - 2.5/1000*Math.min(100,1500) - 5/1000*Math.max(0,100-1500));
+                if(!fakeHl['temperature_975hPa'])fakeHl['temperature_975hPa']=[];
+                fakeHl['temperature_975hPa'].push(21 - (h<12?7:9)/1000*320);
+                if(!fakeHl['dew_point_975hPa'])fakeHl['dew_point_975hPa']=[];
+                fakeHl['dew_point_975hPa'].push(7 - 2.5/1000*Math.min(320,1500) - 5/1000*Math.max(0,320-1500));
+                if(!fakeHl['temperature_950hPa'])fakeHl['temperature_950hPa']=[];
+                fakeHl['temperature_950hPa'].push(21 - (h<12?7:9)/1000*540);
+                if(!fakeHl['dew_point_950hPa'])fakeHl['dew_point_950hPa']=[];
+                fakeHl['dew_point_950hPa'].push(7 - 2.5/1000*Math.min(540,1500) - 5/1000*Math.max(0,540-1500));
+                if(!fakeHl['temperature_925hPa'])fakeHl['temperature_925hPa']=[];
+                fakeHl['temperature_925hPa'].push(21 - (h<12?7:9)/1000*770);
+                if(!fakeHl['dew_point_925hPa'])fakeHl['dew_point_925hPa']=[];
+                fakeHl['dew_point_925hPa'].push(7 - 2.5/1000*Math.min(770,1500) - 5/1000*Math.max(0,770-1500));
+                if(!fakeHl['temperature_900hPa'])fakeHl['temperature_900hPa']=[];
+                fakeHl['temperature_900hPa'].push(21 - (h<12?7:9)/1000*1000);
+                if(!fakeHl['dew_point_900hPa'])fakeHl['dew_point_900hPa']=[];
+                fakeHl['dew_point_900hPa'].push(7 - 2.5/1000*Math.min(1000,1500) - 5/1000*Math.max(0,1000-1500));
+                if(!fakeHl['temperature_850hPa'])fakeHl['temperature_850hPa']=[];
+                fakeHl['temperature_850hPa'].push(21 - (h<12?7:9)/1000*1450);
+                if(!fakeHl['dew_point_850hPa'])fakeHl['dew_point_850hPa']=[];
+                fakeHl['dew_point_850hPa'].push(7 - 2.5/1000*Math.min(1450,1500) - 5/1000*Math.max(0,1450-1500));
+                if(!fakeHl['temperature_800hPa'])fakeHl['temperature_800hPa']=[];
+                fakeHl['temperature_800hPa'].push(21 - (h<12?7:9)/1000*1950);
+                if(!fakeHl['dew_point_800hPa'])fakeHl['dew_point_800hPa']=[];
+                fakeHl['dew_point_800hPa'].push(7 - 2.5/1000*Math.min(1950,1500) - 5/1000*Math.max(0,1950-1500));
+                if(!fakeHl['temperature_700hPa'])fakeHl['temperature_700hPa']=[];
+                fakeHl['temperature_700hPa'].push(21 - (h<12?7:9)/1000*3000);
+                if(!fakeHl['dew_point_700hPa'])fakeHl['dew_point_700hPa']=[];
+                fakeHl['dew_point_700hPa'].push(7 - 2.5/1000*Math.min(3000,1500) - 5/1000*Math.max(0,3000-1500));
+                if(!fakeHl['temperature_600hPa'])fakeHl['temperature_600hPa']=[];
+                fakeHl['temperature_600hPa'].push(21 - (h<12?7:9)/1000*4200);
+                if(!fakeHl['dew_point_600hPa'])fakeHl['dew_point_600hPa']=[];
+                fakeHl['dew_point_600hPa'].push(7 - 2.5/1000*Math.min(4200,1500) - 5/1000*Math.max(0,4200-1500));
+                if(!fakeHl['temperature_500hPa'])fakeHl['temperature_500hPa']=[];
+                fakeHl['temperature_500hPa'].push(21 - (h<12?7:9)/1000*5550);
+                if(!fakeHl['dew_point_500hPa'])fakeHl['dew_point_500hPa']=[];
+                fakeHl['dew_point_500hPa'].push(7 - 2.5/1000*Math.min(5550,1500) - 5/1000*Math.max(0,5550-1500));
+                if(!fakeHl['wind_speed_925hPa'])fakeHl['wind_speed_925hPa']=[];
+                fakeHl['wind_speed_925hPa'].push(200);
+                if(!fakeHl['wind_direction_925hPa'])fakeHl['wind_direction_925hPa']=[];
+                fakeHl['wind_direction_925hPa'].push(190);
+                if(!fakeHl['wind_speed_900hPa'])fakeHl['wind_speed_900hPa']=[];
+                fakeHl['wind_speed_900hPa'].push(220);
+                if(!fakeHl['wind_direction_900hPa'])fakeHl['wind_direction_900hPa']=[];
+                fakeHl['wind_direction_900hPa'].push(200);
+                if(!fakeHl['wind_speed_850hPa'])fakeHl['wind_speed_850hPa']=[];
+                fakeHl['wind_speed_850hPa'].push(250);
+                if(!fakeHl['wind_direction_850hPa'])fakeHl['wind_direction_850hPa']=[];
+                fakeHl['wind_direction_850hPa'].push(210);
+                if(!fakeHl['wind_speed_800hPa'])fakeHl['wind_speed_800hPa']=[];
+                fakeHl['wind_speed_800hPa'].push(270);
+                if(!fakeHl['wind_direction_800hPa'])fakeHl['wind_direction_800hPa']=[];
+                fakeHl['wind_direction_800hPa'].push(220);
+                if(!fakeHl['wind_speed_700hPa'])fakeHl['wind_speed_700hPa']=[];
+                fakeHl['wind_speed_700hPa'].push(300);
+                if(!fakeHl['wind_direction_700hPa'])fakeHl['wind_direction_700hPa']=[];
+                fakeHl['wind_direction_700hPa'].push(230);
+                if(!fakeHl['wind_speed_600hPa'])fakeHl['wind_speed_600hPa']=[];
+                fakeHl['wind_speed_600hPa'].push(320);
+                if(!fakeHl['wind_direction_600hPa'])fakeHl['wind_direction_600hPa']=[];
+                fakeHl['wind_direction_600hPa'].push(240);
+                if(!fakeHl['wind_speed_500hPa'])fakeHl['wind_speed_500hPa']=[];
+                fakeHl['wind_speed_500hPa'].push(340);
+                if(!fakeHl['wind_direction_500hPa'])fakeHl['wind_direction_500hPa']=[];
+                fakeHl['wind_direction_500hPa'].push(250);
+                if(!fakeHl['wind_speed_975hPa'])fakeHl['wind_speed_975hPa']=[];
+                fakeHl['wind_speed_975hPa'].push(100);
+                if(!fakeHl['wind_direction_975hPa'])fakeHl['wind_direction_975hPa']=[];
+                fakeHl['wind_direction_975hPa'].push(185);
+                if(!fakeHl['wind_speed_950hPa'])fakeHl['wind_speed_950hPa']=[];
+                fakeHl['wind_speed_950hPa'].push(100);
+                if(!fakeHl['wind_direction_950hPa'])fakeHl['wind_direction_950hPa']=[];
+                fakeHl['wind_direction_950hPa'].push(195);
+              }
+            }
+            allDaysData={daily:fakeDl,hourly:fakeHl};
+      cachedData=makeDemoData();
+      el('htitle').textContent='Demo — '+today.toISOString().slice(0,10);
+      el('demo-banner').style.display='block';
+      buildDayPicker(allDaysData);
+      try{renderAll(cachedData);}catch(e){console.warn(e);}
+      el('loading').style.display='none';el('app').style.display='block';
+      setTimeout(function(){try{renderDemoCharts();}catch(e){console.warn(e);}},80);
+    },0);
+    return;
+  }
+  var url='https://api.open-meteo.com/v1/forecast'
+    +'?latitude='+lat+'&longitude='+lon
+    +'&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max'
+    +',wind_direction_10m_dominant,precipitation_probability_max,cloud_cover_mean'
+    +'&hourly=temperature_2m,dew_point_2m,relative_humidity_2m,boundary_layer_height'
+    +',cape,shortwave_radiation,visibility,precipitation_probability'
+    +',wind_speed_10m,wind_direction_10m'
+    +',wind_speed_100m,wind_direction_100m'
+    +',wind_speed_900hPa,wind_direction_900hPa'
+    +',wind_speed_850hPa,wind_direction_850hPa'
+    +',wind_speed_700hPa,wind_direction_700hPa'
+    +',cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+    +',precipitation,weather_code'
+    +',temperature_1000hPa,temperature_975hPa,temperature_950hPa,temperature_925hPa'
+    +',temperature_900hPa,temperature_850hPa,temperature_800hPa,temperature_700hPa'
+    +',temperature_600hPa,temperature_500hPa'
+    +',dew_point_1000hPa,dew_point_975hPa,dew_point_950hPa,dew_point_925hPa'
+    +',dew_point_900hPa,dew_point_850hPa,dew_point_800hPa,dew_point_700hPa'
+    +',dew_point_600hPa,dew_point_500hPa'
+    +',wind_speed_975hPa,wind_direction_975hPa'
+    +',wind_speed_950hPa,wind_direction_950hPa'
+    +',wind_speed_925hPa,wind_direction_925hPa'
+    +',wind_speed_800hPa,wind_direction_800hPa'
+    +',wind_speed_600hPa,wind_direction_600hPa'
+    +',wind_speed_500hPa,wind_direction_500hPa'
+    +'&wind_speed_unit=kmh&timezone=UTC&forecast_days=5';
+
+  fetch(url)
+    .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+    .then(function(data){
+      allDaysData=data;
+      var dl=data.daily,hl=data.hourly;
+      var i=Math.min(dayIdx,dl.time.length-1);
+      var h0=i*24,target12=dl.time[i]+'T12:00',h12=h0+12;
+      if(hl.time){for(var hi=h0;hi<h0+24&&hi<hl.time.length;hi++){if(hl.time[hi]&&hl.time[hi].indexOf(target12)===0){h12=hi;break;}}}
+      var maxSpread=0;
+      for(var hh=h0+6;hh<h0+21&&hh<hl.temperature_2m.length;hh++){var sp=hl.temperature_2m[hh]-hl.dew_point_2m[hh];if(sp>maxSpread)maxSpread=sp;}
+      var days=['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+      var date=new Date(dl.time[i]+'T12:00:00');
+      el('htitle').textContent=(i===0?'Dnes':i===1?'Zítra':days[date.getDay()])+' — '+dl.time[i];
+      cachedData={
+        t12:hl.temperature_2m[h12],td12:hl.dew_point_2m[h12],rh:hl.relative_humidity_2m[h12]||60,
+        blh:hl.boundary_layer_height[h12]||0,cape:hl.cape?(hl.cape[h12]||0):0,
+        sw:hl.shortwave_radiation?(hl.shortwave_radiation[h12]||0):0,vis:hl.visibility?(hl.visibility[h12]||15000):15000,
+        wind:Math.round((dl.wind_speed_10m_max[i]||0)/3.6*10)/10,wdir:Math.round(dl.wind_direction_10m_dominant[i]||0),
+        cloud:Math.round(dl.cloud_cover_mean[i]||50),rain:Math.round(dl.precipitation_probability_max[i]||0),
+        tmax:dl.temperature_2m_max[i]||15,maxSpread:maxSpread
+      };
+      try{renderAll(cachedData);}catch(e){el('loading').innerHTML='<div style="color:#ff3d5a;padding:20px">Chyba: '+e.message+'</div>';return;}
+      buildDayPicker(data);
+      el('loading').style.display='none';el('app').style.display='block';
+      setTimeout(function(){try{renderCharts(data,i,h0);}catch(e){console.warn(e);}},80);
+    })
+    .catch(function(){
+      // Build fake allDaysData for demo mode so buildDayPicker works
+      var today=new Date();
+      var fakeDl={time:[],weather_code:[],temperature_2m_max:[],wind_speed_10m_max:[],wind_direction_10m_dominant:[],precipitation_probability_max:[],cloud_cover_mean:[]};
+      var fakeHl={time:[],temperature_2m:[],dew_point_2m:[],boundary_layer_height:[],relative_humidity_2m:[],cape:[],shortwave_radiation:[],visibility:[],precipitation_probability:[],wind_speed_10m:[],wind_direction_10m:[]};
+      for(var d=0;d<5;d++){
+        var dt=new Date(today);dt.setDate(today.getDate()+d);
+        fakeDl.time.push(dt.toISOString().slice(0,10));
+        fakeDl.weather_code.push([0,1,3,61,2][d]);
+        fakeDl.temperature_2m_max.push([26,29,21,17,23][d]);
+        fakeDl.wind_speed_10m_max.push([12,8,23,31,10][d]);
+        fakeDl.wind_direction_10m_dominant.push(210);
+        fakeDl.precipitation_probability_max.push([0,0,25,80,5][d]);
+        fakeDl.cloud_cover_mean.push([30,18,65,90,28][d]);
+        for(var h=0;h<24;h++){
+          var hi=d*24+h;
+          fakeHl.time.push(dt.toISOString().slice(0,10)+'T'+String(h).padStart(2,'0')+':00');
+          fakeHl.temperature_2m.push(15+Math.sin((h-6)/24*Math.PI)*8);
+          fakeHl.dew_point_2m.push(6+Math.sin((h-6)/24*Math.PI)*1.5);
+          fakeHl.boundary_layer_height.push(Math.max(0,Math.sin((h-6)/14*Math.PI)*1600));
+          fakeHl.relative_humidity_2m.push(45);
+          fakeHl.cape.push(Math.max(0,Math.sin((h-8)/14*Math.PI)*700));
+          fakeHl.shortwave_radiation.push(Math.max(0,Math.sin((h-6)/14*Math.PI)*750));
+          fakeHl.visibility.push(18000);
+          fakeHl.precipitation_probability.push(0);
+          fakeHl.wind_speed_10m.push(12);
+          fakeHl.wind_direction_10m.push(210);
+          if(!fakeHl['temperature_1000hPa'])fakeHl['temperature_1000hPa']=[];
+          fakeHl['temperature_1000hPa'].push(21 - (h<12?7:9)/1000*100);
+          if(!fakeHl['dew_point_1000hPa'])fakeHl['dew_point_1000hPa']=[];
+          fakeHl['dew_point_1000hPa'].push(7 - 2.5/1000*Math.min(100,1500) - 5/1000*Math.max(0,100-1500));
+          if(!fakeHl['temperature_975hPa'])fakeHl['temperature_975hPa']=[];
+          fakeHl['temperature_975hPa'].push(21 - (h<12?7:9)/1000*320);
+          if(!fakeHl['dew_point_975hPa'])fakeHl['dew_point_975hPa']=[];
+          fakeHl['dew_point_975hPa'].push(7 - 2.5/1000*Math.min(320,1500) - 5/1000*Math.max(0,320-1500));
+          if(!fakeHl['temperature_950hPa'])fakeHl['temperature_950hPa']=[];
+          fakeHl['temperature_950hPa'].push(21 - (h<12?7:9)/1000*540);
+          if(!fakeHl['dew_point_950hPa'])fakeHl['dew_point_950hPa']=[];
+          fakeHl['dew_point_950hPa'].push(7 - 2.5/1000*Math.min(540,1500) - 5/1000*Math.max(0,540-1500));
+          if(!fakeHl['temperature_925hPa'])fakeHl['temperature_925hPa']=[];
+          fakeHl['temperature_925hPa'].push(21 - (h<12?7:9)/1000*770);
+          if(!fakeHl['dew_point_925hPa'])fakeHl['dew_point_925hPa']=[];
+          fakeHl['dew_point_925hPa'].push(7 - 2.5/1000*Math.min(770,1500) - 5/1000*Math.max(0,770-1500));
+          if(!fakeHl['temperature_900hPa'])fakeHl['temperature_900hPa']=[];
+          fakeHl['temperature_900hPa'].push(21 - (h<12?7:9)/1000*1000);
+          if(!fakeHl['dew_point_900hPa'])fakeHl['dew_point_900hPa']=[];
+          fakeHl['dew_point_900hPa'].push(7 - 2.5/1000*Math.min(1000,1500) - 5/1000*Math.max(0,1000-1500));
+          if(!fakeHl['temperature_850hPa'])fakeHl['temperature_850hPa']=[];
+          fakeHl['temperature_850hPa'].push(21 - (h<12?7:9)/1000*1450);
+          if(!fakeHl['dew_point_850hPa'])fakeHl['dew_point_850hPa']=[];
+          fakeHl['dew_point_850hPa'].push(7 - 2.5/1000*Math.min(1450,1500) - 5/1000*Math.max(0,1450-1500));
+          if(!fakeHl['temperature_800hPa'])fakeHl['temperature_800hPa']=[];
+          fakeHl['temperature_800hPa'].push(21 - (h<12?7:9)/1000*1950);
+          if(!fakeHl['dew_point_800hPa'])fakeHl['dew_point_800hPa']=[];
+          fakeHl['dew_point_800hPa'].push(7 - 2.5/1000*Math.min(1950,1500) - 5/1000*Math.max(0,1950-1500));
+          if(!fakeHl['temperature_700hPa'])fakeHl['temperature_700hPa']=[];
+          fakeHl['temperature_700hPa'].push(21 - (h<12?7:9)/1000*3000);
+          if(!fakeHl['dew_point_700hPa'])fakeHl['dew_point_700hPa']=[];
+          fakeHl['dew_point_700hPa'].push(7 - 2.5/1000*Math.min(3000,1500) - 5/1000*Math.max(0,3000-1500));
+          if(!fakeHl['temperature_600hPa'])fakeHl['temperature_600hPa']=[];
+          fakeHl['temperature_600hPa'].push(21 - (h<12?7:9)/1000*4200);
+          if(!fakeHl['dew_point_600hPa'])fakeHl['dew_point_600hPa']=[];
+          fakeHl['dew_point_600hPa'].push(7 - 2.5/1000*Math.min(4200,1500) - 5/1000*Math.max(0,4200-1500));
+          if(!fakeHl['temperature_500hPa'])fakeHl['temperature_500hPa']=[];
+          fakeHl['temperature_500hPa'].push(21 - (h<12?7:9)/1000*5550);
+          if(!fakeHl['dew_point_500hPa'])fakeHl['dew_point_500hPa']=[];
+          fakeHl['dew_point_500hPa'].push(7 - 2.5/1000*Math.min(5550,1500) - 5/1000*Math.max(0,5550-1500));
+          if(!fakeHl['wind_speed_925hPa'])fakeHl['wind_speed_925hPa']=[];
+          fakeHl['wind_speed_925hPa'].push(200);
+          if(!fakeHl['wind_direction_925hPa'])fakeHl['wind_direction_925hPa']=[];
+          fakeHl['wind_direction_925hPa'].push(190);
+          if(!fakeHl['wind_speed_900hPa'])fakeHl['wind_speed_900hPa']=[];
+          fakeHl['wind_speed_900hPa'].push(220);
+          if(!fakeHl['wind_direction_900hPa'])fakeHl['wind_direction_900hPa']=[];
+          fakeHl['wind_direction_900hPa'].push(200);
+          if(!fakeHl['wind_speed_850hPa'])fakeHl['wind_speed_850hPa']=[];
+          fakeHl['wind_speed_850hPa'].push(250);
+          if(!fakeHl['wind_direction_850hPa'])fakeHl['wind_direction_850hPa']=[];
+          fakeHl['wind_direction_850hPa'].push(210);
+          if(!fakeHl['wind_speed_800hPa'])fakeHl['wind_speed_800hPa']=[];
+          fakeHl['wind_speed_800hPa'].push(270);
+          if(!fakeHl['wind_direction_800hPa'])fakeHl['wind_direction_800hPa']=[];
+          fakeHl['wind_direction_800hPa'].push(220);
+          if(!fakeHl['wind_speed_700hPa'])fakeHl['wind_speed_700hPa']=[];
+          fakeHl['wind_speed_700hPa'].push(300);
+          if(!fakeHl['wind_direction_700hPa'])fakeHl['wind_direction_700hPa']=[];
+          fakeHl['wind_direction_700hPa'].push(230);
+          if(!fakeHl['wind_speed_600hPa'])fakeHl['wind_speed_600hPa']=[];
+          fakeHl['wind_speed_600hPa'].push(320);
+          if(!fakeHl['wind_direction_600hPa'])fakeHl['wind_direction_600hPa']=[];
+          fakeHl['wind_direction_600hPa'].push(240);
+          if(!fakeHl['wind_speed_500hPa'])fakeHl['wind_speed_500hPa']=[];
+          fakeHl['wind_speed_500hPa'].push(340);
+          if(!fakeHl['wind_direction_500hPa'])fakeHl['wind_direction_500hPa']=[];
+          fakeHl['wind_direction_500hPa'].push(250);
+          if(!fakeHl['wind_speed_975hPa'])fakeHl['wind_speed_975hPa']=[];
+          fakeHl['wind_speed_975hPa'].push(100);
+          if(!fakeHl['wind_direction_975hPa'])fakeHl['wind_direction_975hPa']=[];
+          fakeHl['wind_direction_975hPa'].push(185);
+          if(!fakeHl['wind_speed_950hPa'])fakeHl['wind_speed_950hPa']=[];
+          fakeHl['wind_speed_950hPa'].push(100);
+          if(!fakeHl['wind_direction_950hPa'])fakeHl['wind_direction_950hPa']=[];
+          fakeHl['wind_direction_950hPa'].push(195);
+        }
+      }
+      allDaysData={daily:fakeDl,hourly:fakeHl};
+      cachedData=makeDemoData();
+      el('htitle').textContent='Demo — typický letní den';
+      el('demo-banner').style.display='block';
+      buildDayPicker(allDaysData);
+      try{renderAll(cachedData);}catch(e){el('loading').innerHTML='<div style="color:#ff3d5a;padding:20px">Chyba: '+e.message+'</div>';return;}
+      el('loading').style.display='none';el('app').style.display='block';
+      setTimeout(function(){try{renderDemoCharts();}catch(e){console.warn(e);}},80);
+    });
+}
+
+loadDetail();
+</script>
+</body>
+</html>
