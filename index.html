@@ -28,10 +28,15 @@ header{padding:18px 18px 14px;display:flex;align-items:center;justify-content:sp
 .ref:hover{border-color:#2563eb;color:#2563eb}
 .sec{padding:14px 18px 0}
 .slbl{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px}
-.strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.strip{display:flex;gap:6px}
 .strip::-webkit-scrollbar{height:3px}
 .strip::-webkit-scrollbar-thumb{background:#dde3ed;border-radius:2px}
-.chip{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:11px 9px;min-width:62px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;cursor:pointer;color:inherit;outline:none;transition:all .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.chip{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;cursor:pointer;color:inherit;outline:none;transition:all .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.chip-day{font-size:9px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;width:100%;text-align:center}
+.chip-ico{font-size:20px;line-height:1.2;text-align:center}
+.chip-score{font-size:17px;font-weight:800;line-height:1;text-align:center}
+.chip-verd{font-size:8px;font-weight:700;padding:2px 6px;border-radius:10px;text-align:center;white-space:nowrap;max-width:64px;overflow:hidden;text-overflow:ellipsis}
+.chip-temp{font-size:10px;color:#64748b;text-align:center}
 .chip.on{background:#eff6ff;border-color:#93c5fd;box-shadow:0 2px 12px rgba(37,99,235,.12)}
 .chip:hover{border-color:#93c5fd}
 .cbox{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 14px 10px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
@@ -149,14 +154,8 @@ header{padding:18px 18px 14px;display:flex;align-items:center;justify-content:sp
     <span class="upd" id="upd"></span>
     <button class="ref" onclick="loadWeather()">&#8635; Obnovit</button>
   </div>
-  <div class="sec"><div class="slbl">5-denní předpověď</div><div class="strip" id="strip"></div></div>
-  <div class="sec">
-    <div class="cbox">
-      <div class="slbl" style="margin-bottom:8px">Skóre létání</div>
-      <div class="cbars" id="cbars"></div>
-      <div class="bdays" id="bdays"></div>
-    </div>
-  </div>
+  <div class="sec"><div class="slbl">5-denní předpověď &amp; skóre letovosti</div><div class="strip" id="strip"></div></div>
+
   <div class="sec"><div class="slbl" id="hlbl">Detail dne</div><div class="hero" id="hero"></div></div>
   <div id="gauges-grid" style="margin-top:9px;padding:0 18px"></div>
   <div id="detail-btn-wrap" style="margin-top:9px;padding:0 18px"></div>
@@ -236,9 +235,8 @@ function calcThermal(tmax,rhArr,blhArr,capeArr,t12,td12,spread12z,maxSpreadDay,s
 
 function render(){
   var s2=el('strip');s2.innerHTML='';
-  days.forEach(function(d,i){var s=score(d),v=verd(s);var b=document.createElement('button');b.className='chip'+(i===sel?' on':'');b.innerHTML='<span style="font-size:9px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase">'+d.lbl+'</span><span style="font-size:20px">'+wico(d.code)+'</span><span style="font-size:17px;font-weight:800;color:'+v.c+'">'+s+'</span><span style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+v.bg+';color:'+v.c+'">'+v.l+'</span><span style="font-size:10px">'+d.tmax+'&#176;C</span>';b.onclick=function(){sel=i;render()};s2.appendChild(b)});
-  var bw=el('cbars'),bd=el('bdays');bw.innerHTML='';bd.innerHTML='';
-  days.map(score).forEach(function(s,i){var v=verd(s),h=Math.max(4,Math.round(s/100*64)),a=i===sel;var col=document.createElement('div');col.style.cssText='flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer';col.innerHTML='<span style="font-size:9px;font-weight:700;color:'+(a?v.c:v.c+'55')+'">'+s+'</span><div style="width:100%;border-radius:4px 4px 0 0;height:'+h+'px;background:'+(a?'linear-gradient(180deg,'+v.c+','+v.c+'88)':'linear-gradient(180deg,'+v.c+'44,'+v.c+'18)')+'"></div>';col.onclick=function(){sel=i;render()};bw.appendChild(col);var lbl=document.createElement('div');lbl.style.cssText='flex:1;text-align:center;font-size:9px;color:'+(i===sel?'#1a2540':'#94a3b8');lbl.textContent=days[i].lbl;bd.appendChild(lbl)});
+  days.forEach(function(d,i){var s=score(d),v=verd(s);var b=document.createElement('button');b.className='chip'+(i===sel?' on':'');b.innerHTML='<span class="chip-day">'+d.lbl+'</span>'+'<span class="chip-ico">'+wico(d.code)+'</span>'+'<span class="chip-score" style="color:'+v.c+'">'+s+'</span>'+'<span class="chip-verd" style="background:'+v.bg+';color:'+v.c+'">'+v.l+'</span>'+'<span class="chip-temp">'+d.tmax+'°C</span>';b.onclick=function(){sel=i;render()};s2.appendChild(b)});
+
   var d=days[sel],s=score(d),v=verd(s);
   var vc=d.vis>=10?'#00e676':d.vis>=5?'#ffd740':'#ff3d5a';
   var wc=d.wind<=5?'#00e676':d.wind<=8?'#ffd740':'#ff3d5a';
